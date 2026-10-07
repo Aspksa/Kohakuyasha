@@ -98,9 +98,14 @@ def cognition_block(query: str) -> str:
 
 
 def contextual_query(query: str, history: list[dict[str, Any]] | None = None, limit_chars: int = 1200) -> str:
-    """Expand elliptical follow-ups with recent user turns before selecting long-term memory."""
+    """Expand only likely follow-ups; independent new topics must not inherit unrelated recent turns."""
     current = query.strip() if isinstance(query, str) else ""
     parts = [current] if current else []
+    lowered = current.lower()
+    followup_markers = ("а ", "и ", "но ", "она", "он ", "они", "это", "там", "тот ", "та ", "те ", "ещё", "теперь", "продолж")
+    likely_followup = len(tokens(current)) <= 7 or any(lowered.startswith(marker) for marker in followup_markers)
+    if not likely_followup:
+        return current[:limit_chars]
     for item in reversed(history or []):
         if item.get("role") != "user":
             continue
