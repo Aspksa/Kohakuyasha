@@ -9,14 +9,10 @@
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-  <div class="ambient ambient-a"></div>
-  <div class="ambient ambient-b"></div>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand">
-        <img src="/static/logo.svg" alt="">
-        <div><strong>Kohakuyasha</strong><span>личная система</span></div>
-      </div>
+      <div class="brand"><img src="/static/logo.svg" alt=""><div><strong>Kohakuyasha</strong><span>личная система</span></div></div>
       <nav>
         <button class="nav active" data-page="overview"><span>◈</span> Обзор</button>
         <button class="nav" data-page="observe"><span>⌁</span> Наблюдение</button>
@@ -24,103 +20,57 @@
         <button class="nav" data-page="journal"><span>≡</span> Журнал</button>
         <button class="nav" data-page="settings"><span>⚙</span> Настройки</button>
       </nav>
-      <div class="side-foot">
-        <div class="pulse-dot"></div>
-        <div><b id="side-status">Запуск</b><span id="side-action">Инициализация</span></div>
-      </div>
+      <div class="side-foot"><div class="pulse-dot"></div><div><b id="side-status">Подключение</b><span id="side-action">Ожидание ядра</span></div></div>
     </aside>
-
     <main>
-      <header>
-        <div>
-          <p class="eyebrow">КОМАНДНЫЙ ЦЕНТР</p>
-          <h1>Добро пожаловать, господин.</h1>
-        </div>
-        <div class="header-actions">
-          <button class="icon-btn" id="refresh" title="Обновить">↻</button>
-          <button class="primary" id="quick-test">Быстрый тест</button>
-        </div>
-      </header>
+      <header><div><p class="eyebrow">КОМАНДНЫЙ ЦЕНТР</p><h1>Kohakuyasha готовится к работе.</h1></div><div class="header-actions"><button class="icon-btn" id="refresh" title="Обновить">↻</button><button class="primary" id="quick-test">Быстрый тест</button></div></header>
 
       <section class="page active" id="page-overview">
         <div class="hero">
-          <div class="sigil-wrap">
-            <div class="ring ring-one"></div><div class="ring ring-two"></div><div class="ring ring-three"></div>
-            <img src="/static/logo.svg" class="hero-logo" alt="Kohakuyasha">
-          </div>
-          <div class="hero-copy">
-            <span class="state-badge"><i></i><span id="hero-status">Наблюдает</span></span>
-            <h2>Kohakuyasha <em id="version">v0.1.0</em></h2>
-            <p id="current-action">Готова к работе</p>
-            <div class="meter"><span id="activity-meter"></span></div>
-          </div>
+          <div class="sigil-wrap"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="ring ring-three"></div><img src="/static/logo.svg" class="hero-logo" alt="Kohakuyasha"></div>
+          <div class="hero-copy"><span class="state-badge"><i></i><span id="hero-status">Подключение</span></span><h2>Kohakuyasha <em id="version">—</em></h2><p id="current-action">Ожидание ядра</p><div class="meter"><span id="activity-meter"></span></div></div>
         </div>
-
         <div class="stats">
           <article><span>CPU</span><strong id="cpu">—</strong><small>нагрузка системы</small></article>
           <article><span>Память</span><strong id="memory">—</strong><small>процесс Kohakuyasha</small></article>
           <article><span>Uptime</span><strong id="uptime">—</strong><small>текущая сессия</small></article>
           <article><span>Порт</span><strong id="port">—</strong><small>только localhost</small></article>
         </div>
-
         <div class="grid-two">
-          <section class="panel">
-            <div class="panel-head"><div><span class="eyebrow">СОСТОЯНИЕ</span><h3>Системы</h3></div><span class="ok-chip">ONLINE</span></div>
+          <section class="panel"><div class="panel-head"><div><span class="eyebrow">СОСТОЯНИЕ</span><h3>Системы</h3></div><span class="ok-chip" id="overall-state">ПРОВЕРКА</span></div>
             <div class="service-list">
-              <div><span><i class="led ok"></i>Ядро</span><b>ONLINE</b></div>
-              <div><span><i class="led ok"></i>SQLite</span><b id="db-state">READY</b></div>
-              <div><span><i class="led ok"></i>Web UI</span><b>LOCAL</b></div>
-              <div><span><i class="led ok"></i>Watchdog</span><b>ACTIVE</b></div>
+              <div><span><i class="led" id="led-core"></i>Ядро</span><b id="svc-core">—</b></div>
+              <div><span><i class="led" id="led-db"></i>SQLite</span><b id="svc-db">—</b></div>
+              <div><span><i class="led" id="led-web"></i>Web UI</span><b id="svc-web">—</b></div>
+              <div><span><i class="led" id="led-watchdog"></i>Watchdog</span><b id="svc-watchdog">—</b></div>
             </div>
           </section>
-          <section class="panel">
-            <div class="panel-head"><div><span class="eyebrow">ПОСЛЕДНЕЕ</span><h3>Активность</h3></div><button class="text-btn" data-goto="journal">Весь журнал →</button></div>
-            <div id="mini-events" class="event-list compact"></div>
-          </section>
+          <section class="panel"><div class="panel-head"><div><span class="eyebrow">ПОСЛЕДНЕЕ</span><h3>Активность</h3></div><button class="text-btn" data-goto="journal">Весь журнал →</button></div><div id="mini-events" class="event-list compact"></div></section>
         </div>
       </section>
 
       <section class="page" id="page-observe">
         <div class="section-title"><div><p class="eyebrow">LIVE</p><h2>Наблюдение</h2></div><span class="state-badge"><i></i>поток событий</span></div>
-        <div class="observe-grid">
-          <section class="panel live-panel">
-            <div class="visual-core">
-              <div class="orbit o1"></div><div class="orbit o2"></div><div class="orbit o3"></div>
-              <img src="/static/logo.svg" alt="">
-              <span id="observe-action">Готова к работе</span>
-            </div>
-          </section>
-          <section class="panel"><div class="panel-head"><h3>Телеметрия</h3></div><div class="telemetry">
-            <div><span>CPU</span><b id="obs-cpu">—</b></div><div><span>RAM</span><b id="obs-ram">—</b></div>
-            <div><span>Python</span><b id="python">—</b></div><div><span>PID</span><b id="pid">—</b></div>
-          </div></section>
-        </div>
+        <div class="observe-grid"><section class="panel live-panel"><div class="visual-core"><div class="orbit o1"></div><div class="orbit o2"></div><div class="orbit o3"></div><img src="/static/logo.svg" alt=""><span id="observe-action">Ожидание ядра</span></div></section>
+          <section class="panel"><div class="panel-head"><h3>Телеметрия</h3></div><div class="telemetry"><div><span>CPU</span><b id="obs-cpu">—</b></div><div><span>RAM</span><b id="obs-ram">—</b></div><div><span>Python</span><b id="python">—</b></div><div><span>PID</span><b id="pid">—</b></div></div></section></div>
         <section class="panel"><div class="panel-head"><h3>События в реальном времени</h3><span class="live-label">● LIVE</span></div><div id="live-events" class="event-list"></div></section>
       </section>
 
       <section class="page" id="page-tests">
-        <div class="section-title"><div><p class="eyebrow">ДИАГНОСТИКА</p><h2>Тестовый центр</h2></div>
-          <div class="header-actions"><button id="export-diagnostics">Экспорт</button><button id="run-quick">Быстрый тест</button><button class="primary" id="run-full">Полная диагностика</button></div>
-        </div>
-        <section class="panel test-summary">
-          <div><span class="eyebrow">РЕЗУЛЬТАТ</span><strong id="test-score">Ещё не запускалось</strong><small id="test-time">Проверим ядро, БД, API, файлы и окружение.</small></div>
-          <div class="score-ring" id="score-ring"><span>—</span></div>
-        </section>
+        <div class="section-title"><div><p class="eyebrow">ДИАГНОСТИКА</p><h2>Тестовый центр</h2></div><div class="header-actions"><button id="export-diagnostics">Экспорт</button><button id="run-quick">Быстрый тест</button><button class="primary" id="run-full">Полная диагностика</button></div></div>
+        <section class="panel test-summary"><div><span class="eyebrow">РЕЗУЛЬТАТ</span><strong id="test-score">Ещё не запускалось</strong><small id="test-time">Проверим ядро, БД, файлы и окружение.</small></div><div class="score-ring" id="score-ring"><span>—</span></div></section>
         <section class="panel"><div id="test-results" class="test-list"><div class="empty">Нажмите «Быстрый тест» или «Полная диагностика».</div></div></section>
       </section>
 
-      <section class="page" id="page-journal">
-        <div class="section-title"><div><p class="eyebrow">ИСТОРИЯ</p><h2>Журнал событий</h2></div><button id="journal-refresh">Обновить</button></div>
-        <section class="panel"><div id="journal-events" class="event-list journal"></div></section>
-      </section>
+      <section class="page" id="page-journal"><div class="section-title"><div><p class="eyebrow">ИСТОРИЯ</p><h2>Журнал событий</h2></div><button id="journal-refresh">Обновить</button></div><section class="panel"><div id="journal-events" class="event-list journal"></div></section></section>
 
       <section class="page" id="page-settings">
         <div class="section-title"><div><p class="eyebrow">КОНФИГУРАЦИЯ</p><h2>Настройки</h2></div></div>
         <div class="grid-two">
-          <section class="panel setting-card"><div><h3>Автозапуск Windows</h3><p>Находит Kohakuyasha даже при смене буквы переносного диска.</p></div><label class="switch"><input type="checkbox" id="autostart"><span></span></label></section>
-          <section class="panel setting-card"><div><h3>Локальная безопасность</h3><p>Веб-интерфейс слушает только 127.0.0.1 и не публикуется в сеть.</p></div><span class="ok-chip">ВКЛ</span></section>
-          <section class="panel setting-card"><div><h3>Перезапуск ядра</h3><p>Мягко перезапускает веб-ядро. Watchdog продолжит наблюдение.</p></div><button id="restart-core">Перезапустить</button></section>
-          <section class="panel setting-card danger"><div><h3>Завершить работу</h3><p>Полностью закрывает Kohakuyasha и значок в области уведомлений.</p></div><button id="shutdown">Выход</button></section>
+          <section class="panel setting-card"><div><h3>Автозапуск Windows</h3><p>Находит этот экземпляр Kohakuyasha даже после смены буквы переносного диска.</p></div><label class="switch"><input type="checkbox" id="autostart"><span></span></label></section>
+          <section class="panel setting-card"><div><h3>Локальная безопасность</h3><p>Host, Origin, локальная сессия и SameSite-cookie защищают API и WebSocket.</p></div><span class="ok-chip">ВКЛ</span></section>
+          <section class="panel setting-card"><div><h3>Перезапуск ядра</h3><p>Мягкий restart с повторным выбором свободного порта и backoff watchdog.</p></div><button id="restart-core">Перезапустить</button></section>
+          <section class="panel setting-card danger"><div><h3>Завершить работу</h3><p>Полностью закрывает Kohakuyasha и удаляет runtime-состояние.</p></div><button id="shutdown">Выход</button></section>
         </div>
       </section>
     </main>

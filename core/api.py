@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, Response
+from fastapi import FastAPI, Header, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import autostart
@@ -15,58 +14,89 @@ from .database import Database
 from .diagnostics import Diagnostics
 from .events import EventHub
 from .runtime import RuntimeState
+from .security import ACTION_HEADER, SESSION_COOKIE, is_allowed_host_header, is_allowed_origin, session_matches
 
 
-def create_app(
-    *,
-    paths: Paths,
-    config: ConfigStore,
-    db: Database,
-    events: EventHub,
-    runtime: RuntimeState,
-) -> FastAPI:
-    app = FastAPI(title="Kohakuyasha", docs_url=None, redoc_url=None)
+def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: EventHub, runtime: RuntimeState) -> FastAPI:
+    app = FastAPI(title="Kohakuyasha", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=paths.static), name="static")
 
-    def require_local_action(marker: str | None) -> None:
-        if marker != "1":
-            raise HTTPException(status_code=403, detail="Локальное действие отклонено.")
+    def security_headers(response: Response) -> Response:
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; "
+            "connect-src 'self' ws://127.0.0.1:* ws://localhost:* ws://[::1]:*; "
+            "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+        )
+        return response
 
     @app.middleware("http")
-    async def local_only(request: Request, call_next):
-        host = (request.client.host if request.client else "")
-        if host not in {"127.0.0.1", "::1", "localhost", "testclient"}:
-            raise HTTPException(status_code=403, detail="Kohakuyasha доступна только локально.")
-        return await call_next(request)
+    async def security_guard(request: Request, call_next):
+        if not is_allowed_host_header(request.headers.get("host"), runtime.port):
+            return security_headers(JSONResponse({"detail": "Недопустимый Host."}, status_code=400))
+
+        origin = request.headers.get("origin")
+        if origin and not is_allowed_origin(origin, runtime.port):
+            return security_headers(JSONResponse({"detail": "Недопустимый Origin."}, status_code=403))
+
+        if request.url.path.startswith("/api/"):
+            token = request.cookies.get(SESSION_COOKIE)
+            if not session_matches(token, runtime.session_token):
+                return security_headers(JSONResponse({"detail": "Требуется локальная сессия."}, status_code=401))
+            if request.method not in {"GET", "HEAD", "OPTIONS"}:
+                if not origin or not is_allowed_origin(origin, runtime.port):
+                    return security_headers(JSONResponse({"detail": "Для изменения требуется same-origin запрос."}, status_code=403))
+                if request.headers.get(ACTION_HEADER) != "1":
+                    return security_headers(JSONResponse({"detail": "Маркер локального действия отсутствует."}, status_code=403))
+
+        response = await call_next(request)
+        return security_headers(response)
 
     @app.get("/")
     async def index():
-        return FileResponse(paths.web / "index.html")
+        response = FileResponse(paths.web / "index.html")
+        response.set_cookie(
+            SESSION_COOKIE,
+            runtime.session_token,
+            httponly=True,
+            secure=False,
+            samesite="strict",
+            path="/",
+        )
+        return response
 
     @app.get("/api/status")
     async def status():
-        settings = config.load()
+        settings, snap, autostart_enabled = await asyncio.gather(
+            asyncio.to_thread(config.load),
+            asyncio.to_thread(runtime.snapshot),
+            asyncio.to_thread(autostart.is_enabled),
+        )
         return {
-            "runtime": runtime.snapshot(),
+            "runtime": snap,
             "settings": {
                 "language": settings.language,
                 "open_browser": settings.open_browser,
                 "minimize_to_tray": settings.minimize_to_tray,
-                "autostart": autostart.is_enabled(),
+                "autostart": autostart_enabled,
             },
-            "database": {"path": str(paths.database), "exists": paths.database.exists()},
+            "services": {
+                "core": "ONLINE",
+                "database": "READY" if paths.database.exists() else "INIT",
+                "web": "LOCAL",
+                "watchdog": "ACTIVE" if snap["watchdog_active"] else "OFF",
+            },
         }
 
     @app.get("/api/events")
-    async def recent_events(limit: int = 100):
-        return {"events": db.recent_events(limit)}
+    async def recent_events(limit: int = 80):
+        return {"events": await asyncio.to_thread(db.recent_events, limit)}
 
     @app.post("/api/tests/run")
-    async def run_tests(
-        mode: str = "quick",
-        x_kohakuyasha_request: str | None = Header(default=None),
-    ):
-        require_local_action(x_kohakuyasha_request)
+    async def run_tests(mode: str = "quick", x_kohakuyasha_request: str | None = Header(default=None)):
         mode = "full" if mode == "full" else "quick"
         runtime.set_status("Тестирование", f"{'Полная' if mode == 'full' else 'Быстрая'} диагностика")
         events.emit("Запущена диагностика", event_type="diagnostics", payload={"mode": mode})
@@ -82,69 +112,70 @@ def create_app(
         return result
 
     @app.post("/api/autostart")
-    async def set_autostart(
-        payload: dict[str, Any],
-        x_kohakuyasha_request: str | None = Header(default=None),
-    ):
-        require_local_action(x_kohakuyasha_request)
+    async def set_autostart(payload: dict[str, Any], x_kohakuyasha_request: str | None = Header(default=None)):
         enabled = bool(payload.get("enabled"))
         if enabled:
-            autostart.enable(paths.root)
+            await asyncio.to_thread(autostart.enable, paths.root)
         else:
-            autostart.disable()
-        settings = config.load()
+            await asyncio.to_thread(autostart.disable)
+        settings = await asyncio.to_thread(config.load)
         settings.autostart = enabled
-        config.save(settings)
-        events.emit(
-            "Автозапуск включён" if enabled else "Автозапуск отключён",
-            event_type="settings",
-        )
-        return {"enabled": autostart.is_enabled()}
+        await asyncio.to_thread(config.save, settings)
+        actual = await asyncio.to_thread(autostart.is_enabled)
+        events.emit("Автозапуск включён" if actual else "Автозапуск отключён", event_type="settings")
+        return {"enabled": actual}
 
     @app.get("/api/diagnostics/export")
     async def export_diagnostics():
-        settings = config.load()
+        settings, snap, integrity, recent = await asyncio.gather(
+            asyncio.to_thread(config.load),
+            asyncio.to_thread(runtime.snapshot),
+            asyncio.to_thread(db.integrity_check),
+            asyncio.to_thread(db.recent_events, 250),
+        )
         report = {
             "project": "Kohakuyasha",
-            "runtime": runtime.snapshot(),
-            "database_integrity": db.integrity_check(),
+            "runtime": snap,
+            "database_integrity": integrity,
             "settings": {
                 "language": settings.language,
                 "host": settings.host,
                 "port": settings.port,
                 "open_browser": settings.open_browser,
                 "minimize_to_tray": settings.minimize_to_tray,
-                "autostart": autostart.is_enabled(),
+                "autostart": await asyncio.to_thread(autostart.is_enabled),
             },
-            "events": db.recent_events(250),
+            "events": recent,
         }
-        payload = json.dumps(report, ensure_ascii=False, indent=2)
         return Response(
-            content=payload,
+            content=json.dumps(report, ensure_ascii=False, indent=2),
             media_type="application/json",
             headers={"Content-Disposition": "attachment; filename=kohakuyasha-diagnostics.json"},
         )
 
     @app.post("/api/system/restart")
     async def restart(x_kohakuyasha_request: str | None = Header(default=None)):
-        require_local_action(x_kohakuyasha_request)
         events.emit("Запрошен перезапуск ядра", event_type="system")
         if runtime.on_restart:
-            asyncio.get_running_loop().call_later(0.2, runtime.on_restart)
-        return {"accepted": True}
+            runtime.on_restart()
+        return {"accepted": bool(runtime.on_restart)}
 
     @app.post("/api/system/shutdown")
     async def shutdown(x_kohakuyasha_request: str | None = Header(default=None)):
-        require_local_action(x_kohakuyasha_request)
         events.emit("Запрошено завершение Kohakuyasha", event_type="system")
         if runtime.on_shutdown:
-            asyncio.get_running_loop().call_later(0.2, runtime.on_shutdown)
-        return {"accepted": True}
+            runtime.on_shutdown()
+        return {"accepted": bool(runtime.on_shutdown)}
 
     @app.websocket("/ws/events")
     async def websocket_events(websocket: WebSocket):
-        client = websocket.client.host if websocket.client else ""
-        if client not in {"127.0.0.1", "::1", "localhost", "testclient"}:
+        if not is_allowed_host_header(websocket.headers.get("host"), runtime.port):
+            await websocket.close(code=1008)
+            return
+        if not is_allowed_origin(websocket.headers.get("origin"), runtime.port):
+            await websocket.close(code=1008)
+            return
+        if not session_matches(websocket.cookies.get(SESSION_COOKIE), runtime.session_token):
             await websocket.close(code=1008)
             return
         await websocket.accept()

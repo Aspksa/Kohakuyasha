@@ -9,30 +9,25 @@ $Root = (Resolve-Path $Root).Path.TrimEnd("\")
 $RuntimeRoot = Join-Path $Root ".runtime"
 $PortableRoot = Join-Path $RuntimeRoot "python"
 $VenvRoot = Join-Path $RuntimeRoot "venv"
-$Requirements = Join-Path $Root "requirements.txt"
-$DepsHashFile = Join-Path $RuntimeRoot "deps.sha256"
-
+$Requirements = Join-Path $Root "requirements.lock"
+$DepsStateFile = Join-Path $RuntimeRoot "deps.state.json"
+$PinnedPython = (Get-Content -LiteralPath (Join-Path $Root "PYTHON_VERSION") -Raw).Trim()
 New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
 
-function Write-Step([string]$Text) {
-    Write-Host "[Kohakuyasha] $Text" -ForegroundColor Yellow
-}
+function Write-Step([string]$Text) { Write-Host "[Kohakuyasha] $Text" -ForegroundColor Yellow }
 
 function Test-Python([string]$Exe) {
-    if (-not (Test-Path $Exe)) { return $false }
+    if (-not (Test-Path -LiteralPath $Exe)) { return $false }
     try {
         & $Exe -c "import sys; raise SystemExit(0 if sys.version_info >= (3,11) else 1)" 2>$null
         return ($LASTEXITCODE -eq 0)
-    } catch {
-        return $false
-    }
+    } catch { return $false }
 }
 
 function Get-SystemPython {
     $candidates = @()
     try {
-        $py = (Get-Command py.exe -ErrorAction SilentlyContinue)
-        if ($py) {
+        if (Get-Command py.exe -ErrorAction SilentlyContinue) {
             $probe = & py.exe -3 -c "import sys; print(sys.executable)" 2>$null
             if ($LASTEXITCODE -eq 0 -and $probe) { $candidates += $probe.Trim() }
         }
@@ -49,62 +44,41 @@ function Get-SystemPython {
     return $null
 }
 
-function Install-PortablePython {
-    Write-Step "Python 3.11+ не найден. Загружаю переносимый Python..."
-    New-Item -ItemType Directory -Force -Path $PortableRoot | Out-Null
+function Enable-EmbeddedSite([string]$PythonRoot) {
+    $pth = Get-ChildItem -LiteralPath $PythonRoot -Filter "python*._pth" | Select-Object -First 1
+    if ($pth) {
+        $lines = Get-Content -LiteralPath $pth.FullName
+        $lines = $lines | ForEach-Object { if ($_ -match '^\s*#\s*import site\s*$') { "import site" } else { $_ } }
+        if (-not ($lines -contains "import site")) { $lines += "import site" }
+        Set-Content -LiteralPath $pth.FullName -Value $lines -Encoding ASCII
+    }
+}
 
-    $index = Invoke-WebRequest -UseBasicParsing -Uri "https://www.python.org/ftp/python/"
-    $versions = [regex]::Matches($index.Content, 'href="(3\.\d+\.\d+)/"') |
-        ForEach-Object { $_.Groups[1].Value } |
-        Sort-Object { [version]$_ } -Descending -Unique
+function Install-PortablePython {
+    Write-Step "Устанавливаю закреплённый переносимый Python $PinnedPython..."
+    if (Test-Path -LiteralPath $PortableRoot) { Remove-Item -LiteralPath $PortableRoot -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $PortableRoot | Out-Null
 
     $arch = "amd64"
     if ($env:PROCESSOR_ARCHITECTURE -match "ARM64") { $arch = "arm64" }
-
-    $selected = $null
-    foreach ($ver in $versions) {
-        if ([version]$ver -lt [version]"3.11.0") { continue }
-        $url = "https://www.python.org/ftp/python/$ver/python-$ver-embed-$arch.zip"
-        try {
-            $head = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $url -TimeoutSec 10
-            if ($head.StatusCode -ge 200 -and $head.StatusCode -lt 400) {
-                $selected = @{ Version = $ver; Url = $url }
-                break
-            }
-        } catch {}
-    }
-
-    if (-not $selected) {
-        throw "Не удалось найти переносимую сборку Python 3.11+ на python.org."
-    }
-
-    $zip = Join-Path $RuntimeRoot "python.zip"
-    Write-Step "Загрузка Python $($selected.Version) ($arch)..."
-    Invoke-WebRequest -UseBasicParsing -Uri $selected.Url -OutFile $zip
-    if (Test-Path $PortableRoot) { Remove-Item $PortableRoot -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path $PortableRoot | Out-Null
-    Expand-Archive -Path $zip -DestinationPath $PortableRoot -Force
-    Remove-Item $zip -Force
-
-    $pth = Get-ChildItem $PortableRoot -Filter "python*._pth" | Select-Object -First 1
-    if ($pth) {
-        $content = Get-Content $pth.FullName
-        $content = $content | ForEach-Object {
-            if ($_ -match '^\s*#\s*import site\s*$') { "import site" } else { $_ }
-        }
-        if (-not ($content -contains "import site")) { $content += "import site" }
-        Set-Content -Path $pth.FullName -Value $content -Encoding ASCII
-    }
+    elseif ($env:PROCESSOR_ARCHITECTURE -match "86") { $arch = "win32" }
+    $url = "https://www.python.org/ftp/python/$PinnedPython/python-$PinnedPython-embed-$arch.zip"
+    $zip = Join-Path $RuntimeRoot "python-$PinnedPython-$arch.zip"
+    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
+    Expand-Archive -LiteralPath $zip -DestinationPath $PortableRoot -Force
+    Remove-Item -LiteralPath $zip -Force
+    Enable-EmbeddedSite $PortableRoot
 
     $python = Join-Path $PortableRoot "python.exe"
-    $pipProbe = & $python -m pip --version 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Step "Устанавливаю pip..."
+    $pipOk = $false
+    try { & $python -m pip --version 2>$null; $pipOk = ($LASTEXITCODE -eq 0) } catch {}
+    if (-not $pipOk) {
+        Write-Step "Устанавливаю pip в переносимый runtime..."
         $getPip = Join-Path $RuntimeRoot "get-pip.py"
         Invoke-WebRequest -UseBasicParsing -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile $getPip
         & $python $getPip --disable-pip-version-check
         if ($LASTEXITCODE -ne 0) { throw "Не удалось установить pip." }
-        Remove-Item $getPip -Force
+        Remove-Item -LiteralPath $getPip -Force
     }
     return $python
 }
@@ -115,20 +89,37 @@ function Ensure-Environment {
         return @{ Python = $portable; PythonW = (Join-Path $PortableRoot "pythonw.exe"); Kind = "portable" }
     }
 
+    $venvPython = Join-Path $VenvRoot "Scripts\python.exe"
+    if ((Test-Path -LiteralPath $VenvRoot) -and -not (Test-Python $venvPython)) {
+        Write-Step "Удаляю повреждённое виртуальное окружение..."
+        Remove-Item -LiteralPath $VenvRoot -Recurse -Force
+    }
+
     $systemPython = Get-SystemPython
     if ($systemPython) {
-        Write-Step "Найден системный Python. Подготавливаю изолированное окружение..."
-        $venvPython = Join-Path $VenvRoot "Scripts\python.exe"
+        Write-Step "Найден системный Python. Подготавливаю локальное venv..."
         if (-not (Test-Python $venvPython)) {
-            if (Test-Path $VenvRoot) { Remove-Item $VenvRoot -Recurse -Force }
             & $systemPython -m venv $VenvRoot
             if ($LASTEXITCODE -ne 0) { throw "Не удалось создать виртуальное окружение." }
         }
         return @{ Python = $venvPython; PythonW = (Join-Path $VenvRoot "Scripts\pythonw.exe"); Kind = "venv" }
     }
 
+    if (Test-Path -LiteralPath $VenvRoot) { Remove-Item -LiteralPath $VenvRoot -Recurse -Force }
     $python = Install-PortablePython
     return @{ Python = $python; PythonW = (Join-Path $PortableRoot "pythonw.exe"); Kind = "portable" }
+}
+
+function Get-EnvironmentFingerprint([string]$Python, [string]$Kind) {
+    $pythonHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Python).Hash
+    $requirementsHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Requirements).Hash
+    $version = (& $Python -c "import sys; print(sys.version.split()[0])").Trim()
+    return @{ python_sha256 = $pythonHash; python_version = $version; requirements_sha256 = $requirementsHash; kind = $Kind }
+}
+
+function Test-RuntimeImports([string]$Python) {
+    & $Python -c "import fastapi,uvicorn,pystray,PIL,psutil" 2>$null
+    return ($LASTEXITCODE -eq 0)
 }
 
 try {
@@ -136,27 +127,31 @@ try {
     $envInfo = Ensure-Environment
     $python = $envInfo.Python
     $pythonw = $envInfo.PythonW
-    if (-not (Test-Path $pythonw)) { $pythonw = $python }
+    if (-not (Test-Path -LiteralPath $pythonw)) { $pythonw = $python }
 
-    $reqHash = (Get-FileHash -Algorithm SHA256 $Requirements).Hash
-    $oldHash = ""
-    if (Test-Path $DepsHashFile) { $oldHash = (Get-Content $DepsHashFile -Raw).Trim() }
-
-    if ($reqHash -ne $oldHash) {
-        Write-Step "Устанавливаю/обновляю зависимости..."
-        & $python -m pip install --disable-pip-version-check --upgrade pip
-        if ($LASTEXITCODE -ne 0) { throw "Не удалось обновить pip." }
-        & $python -m pip install --disable-pip-version-check -r $Requirements
-        if ($LASTEXITCODE -ne 0) { throw "Не удалось установить зависимости." }
-        Set-Content -Path $DepsHashFile -Value $reqHash -Encoding ASCII
-    } else {
-        Write-Step "Зависимости готовы."
+    $fingerprint = Get-EnvironmentFingerprint $python $envInfo.Kind
+    $needInstall = $true
+    if (Test-Path -LiteralPath $DepsStateFile) {
+        try {
+            $old = Get-Content -LiteralPath $DepsStateFile -Raw | ConvertFrom-Json
+            $needInstall = -not (
+                $old.python_sha256 -eq $fingerprint.python_sha256 -and
+                $old.python_version -eq $fingerprint.python_version -and
+                $old.requirements_sha256 -eq $fingerprint.requirements_sha256 -and
+                $old.kind -eq $fingerprint.kind
+            )
+        } catch { $needInstall = $true }
     }
+    if (-not $needInstall) { $needInstall = -not (Test-RuntimeImports $python) }
 
-    Write-Step "Проверяю установку..."
-    & $python -m pytest -q "$Root\tests" --disable-warnings
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Некоторые тесты не прошли. Запуск продолжен; подробности доступны в разделе диагностики."
+    if ($needInstall) {
+        Write-Step "Устанавливаю закреплённые runtime-зависимости..."
+        & $python -m pip install --disable-pip-version-check -r $Requirements
+        if ($LASTEXITCODE -ne 0) { throw "Не удалось установить runtime-зависимости." }
+        $fingerprint | ConvertTo-Json | Set-Content -LiteralPath $DepsStateFile -Encoding UTF8
+        if (-not (Test-RuntimeImports $python)) { throw "Проверка runtime-зависимостей не прошла." }
+    } else {
+        Write-Step "Runtime готов."
     }
 
     Write-Step "Запускаю Kohakuyasha..."
@@ -164,7 +159,7 @@ try {
     if ($SafeMode) { $launcherArgs += " --safe" }
     Start-Process -FilePath $pythonw -ArgumentList $launcherArgs -WorkingDirectory $Root
     Write-Step "Готово. Kohakuyasha работает в области уведомлений."
-    Start-Sleep -Milliseconds 800
+    Start-Sleep -Milliseconds 500
 } catch {
     Write-Host ""
     Write-Host "Ошибка запуска Kohakuyasha:" -ForegroundColor Red

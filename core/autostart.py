@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
-
-APP_NAME = "Kohakuyasha"
 
 
 def _startup_dir() -> Path:
@@ -13,18 +12,31 @@ def _startup_dir() -> Path:
     return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
 
 
-def _cmd_file() -> Path:
-    return _startup_dir() / "Kohakuyasha-Autostart.cmd"
+def _vbs_file() -> Path:
+    return _startup_dir() / "Kohakuyasha-Autostart.vbs"
 
 
 def _ps_file() -> Path:
     return _startup_dir() / "Kohakuyasha-Autostart.ps1"
 
 
+def ensure_instance_marker(project_root: Path) -> str:
+    marker = project_root / ".kohakuyasha-id"
+    try:
+        value = marker.read_text(encoding="utf-8").strip()
+        if value:
+            return value
+    except OSError:
+        pass
+    value = str(uuid.uuid4())
+    marker.write_text(value + "\n", encoding="utf-8")
+    return value
+
+
 def is_enabled() -> bool:
     if os.name != "nt":
         return False
-    return _cmd_file().exists() and _ps_file().exists()
+    return _vbs_file().exists() and _ps_file().exists()
 
 
 def enable(project_root: Path) -> Path:
@@ -32,43 +44,39 @@ def enable(project_root: Path) -> Path:
         raise RuntimeError("Автозапуск поддерживается только в Windows.")
 
     root = project_root.resolve()
-    drive = Path(root.anchor)
-    relative = root.relative_to(drive)
-    marker_rel = str(relative / ".kohakuyasha-id").replace("'", "''")
-    bat_rel = str(relative / "Kohakuyasha.bat").replace("'", "''")
-
+    instance_id = ensure_instance_marker(root).replace("'", "''")
     startup = _startup_dir()
     startup.mkdir(parents=True, exist_ok=True)
 
     ps_script = f"""$ErrorActionPreference = 'SilentlyContinue'
-$markerRel = '{marker_rel}'
-$batRel = '{bat_rel}'
+$instanceId = '{instance_id}'
 foreach ($drive in Get-PSDrive -PSProvider FileSystem) {{
-    $marker = Join-Path $drive.Root $markerRel
-    if (Test-Path -LiteralPath $marker) {{
-        $bat = Join-Path $drive.Root $batRel
-        if (Test-Path -LiteralPath $bat) {{
-            Start-Process -FilePath $bat -WorkingDirectory (Split-Path -Parent $bat)
-            break
-        }}
+    $marker = Join-Path $drive.Root '.kohakuyasha-id'
+    if (-not (Test-Path -LiteralPath $marker)) {{ continue }}
+    $found = (Get-Content -LiteralPath $marker -Raw -ErrorAction SilentlyContinue).Trim()
+    if ($found -ne $instanceId) {{ continue }}
+    $root = Split-Path -Parent $marker
+    $bat = Join-Path $root 'Kohakuyasha.bat'
+    if (Test-Path -LiteralPath $bat) {{
+        Start-Process -FilePath $bat -WorkingDirectory $root
+        break
     }}
 }}
 """
-    _ps_file().write_text(ps_script, encoding="utf-8")
-    _cmd_file().write_text(
-        '@echo off\r\n'
-        'powershell.exe -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass '
-        '-File "%~dp0Kohakuyasha-Autostart.ps1"\r\n',
-        encoding="ascii",
+    # UTF-8 BOM is required for Windows PowerShell 5.1 to read non-ASCII paths reliably.
+    _ps_file().write_text(ps_script, encoding="utf-8-sig")
+    command = (
+        'Set sh=CreateObject("WScript.Shell")\r\n'
+        'base=CreateObject("Scripting.FileSystemObject").GetParentFolderName(WScript.ScriptFullName)\r\n'
+        'ps=base & "\\Kohakuyasha-Autostart.ps1"\r\n'
+        'sh.Run "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File """ & ps & """", 0, False\r\n'
     )
-    return _cmd_file()
+    _vbs_file().write_text(command, encoding="ascii")
+    return _vbs_file()
 
 
 def disable() -> None:
     if os.name != "nt":
         return
-    for path in (_cmd_file(), _ps_file()):
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            pass
+    for path in (_vbs_file(), _ps_file(), _startup_dir() / "Kohakuyasha-Autostart.cmd"):
+        path.unlink(missing_ok=True)
