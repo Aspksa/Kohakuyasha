@@ -43,10 +43,29 @@
     try { const r = await Koh.api("/api/update/rollback", {method: "POST", body: "{}"}); state = r.state; busy = false; publish(); draw(`Файлы возвращены к v${r.result.version}.`); }
     catch (e) { busy = false; draw(e.message, true); }
   }
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  // After a relaunch the old server goes away and a new one appears: reload as soon as the new one answers.
+  async function waitForRestart(oldPid) {
+    const started = Date.now(); let sawDown = false;
+    while (Date.now() - started < 120000) {
+      await sleep(1500);
+      try {
+        const r = await fetch("/api/status", {credentials: "same-origin", cache: "no-store"});
+        if (r.ok) {
+          const d = await r.json();
+          if (sawDown || (oldPid && d.runtime && d.runtime.pid !== oldPid)) { location.reload(); return; }
+        } else sawDown = true;
+      } catch { sawDown = true; }
+      busy = true; draw(sawDown ? "Запускаю новую версию… это занимает несколько секунд." : "Останавливаю текущую версию…");
+    }
+    busy = false;
+    draw("Kohakuyasha не запустилась автоматически. Откройте Kohakuyasha.bat вручную; если не получится, пришлите файлы logs/relaunch.log и logs/launcher-crash.log.", true);
+  }
   async function restart() {
+    const oldPid = Koh.status && Koh.status.runtime ? Koh.status.runtime.pid : 0;
     try {
       const r = await Koh.api("/api/update/restart", {method: "POST", body: "{}"});
-      if (r.relaunched) { Koh.toast("Перезапуск… страница обновится через несколько секунд"); setTimeout(() => location.reload(), 9000); }
+      if (r.relaunched) waitForRestart(oldPid);
       else alert("Автоматический перезапуск доступен только в Windows. Закройте Kohakuyasha (Настройки → Выход) и запустите Kohakuyasha.bat снова.");
     } catch { Koh.toast("Не удалось перезапустить"); }
   }
