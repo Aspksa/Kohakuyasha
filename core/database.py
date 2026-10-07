@@ -125,13 +125,6 @@ class Database:
                     created_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_memory_dialog ON memory_items(dialog_id);
-                CREATE TABLE IF NOT EXISTS calendar_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    day TEXT NOT NULL,
-                    text TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_calendar_day ON calendar_events(day);
                 CREATE TABLE IF NOT EXISTS facts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     text TEXT NOT NULL,
@@ -443,28 +436,6 @@ class Database:
                 (int(after_id), max(1, min(int(limit), 1000))),
             ).fetchall()
         return [dict(r) for r in rows]
-
-    # ---------- calendar ----------
-    def add_event_note(self, day: str, text: str) -> dict[str, Any]:
-        now = datetime.now(timezone.utc).isoformat()
-        with self._lock, self.session() as conn:
-            cur = conn.execute("INSERT INTO calendar_events(day, text, created_at) VALUES (?, ?, ?)", (day, text, now))
-            return {"id": int(cur.lastrowid), "day": day, "text": text}
-
-    def list_event_notes(self, start: str, end: str) -> list[dict[str, Any]]:
-        with self._lock, self.session() as conn:
-            rows = conn.execute(
-                "SELECT id, day, text FROM calendar_events WHERE day >= ? AND day <= ? ORDER BY day, id", (start, end)
-            ).fetchall()
-        return [dict(r) for r in rows]
-
-    def day_note_count(self, day: str) -> int:
-        with self._lock, self.session() as conn:
-            return int(conn.execute("SELECT COUNT(*) FROM calendar_events WHERE day = ?", (day,)).fetchone()[0])
-
-    def delete_event_note(self, note_id: int) -> bool:
-        with self._lock, self.session() as conn:
-            return conn.execute("DELETE FROM calendar_events WHERE id = ?", (note_id,)).rowcount > 0
 
     def integrity_check(self) -> tuple[bool, str]:
         with self._lock, self.session() as conn:

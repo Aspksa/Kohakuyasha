@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import secrets as pysecrets
 import threading
@@ -13,7 +14,7 @@ from fastapi import Body, FastAPI, Header, Request, WebSocket, WebSocketDisconne
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, assistant, autostart, brain, media, memory, prefs
+from . import ai, assistant, autostart, brain, media, memory, prefs, updater
 from .config import ConfigStore, Paths
 from .database import Database
 from .diagnostics import Diagnostics
@@ -82,11 +83,16 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
             "app": app_cfg, "memory": asdict(memory_settings()),
         }
 
-    def security_headers(response: Response) -> Response:
+    def security_headers(response: Response, path: str = "") -> Response:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Cache-Control"] = "no-store"
+        if path.startswith("/media/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"  # content-addressed names never change
+        elif path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"  # revalidate by ETag: cheap 304s, instant updates after an upgrade
+        else:
+            response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; "
             "connect-src 'self' ws://127.0.0.1:* ws://localhost:*; "
@@ -120,7 +126,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
                     return security_headers(JSONResponse({"detail": "Маркер локального действия отсутствует."}, status_code=403))
 
         response = await call_next(request)
-        return security_headers(response)
+        return security_headers(response, request.url.path)
 
     @app.get("/")
     async def index():
@@ -334,7 +340,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         except ValueError:
             return JSONResponse({"detail": "Некорректный ключ."}, status_code=400)
         events.emit("API-ключ ИИ сохранён", event_type="settings")
-        return {"has_key": True, "key_hint": secrets.hint()}
+        return {"has_key": True, "key_hint": secrets.hint("api_key")}
 
     @app.delete("/api/ai/key")
     async def delete_key():
@@ -534,29 +540,95 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     async def search_memory(q: str = "", limit: int = 6):
         return {"results": await asyncio.to_thread(db.search_memory, q[:500], limit, 0)}
 
-    # ---------- calendar notes ----------
-    DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    # ---------- project update from GitHub ----------
+    def update_settings() -> updater.UpdateSettings:
+        return updater.validate_settings(db.get_setting("update"))
 
-    @app.get("/api/calendar")
-    async def calendar_range(start: str = "", end: str = ""):
-        if not (DAY_RE.match(start) and DAY_RE.match(end)):
-            return JSONResponse({"detail": "Нужны даты start и end в формате ГГГГ-ММ-ДД."}, status_code=400)
-        return {"notes": await asyncio.to_thread(db.list_event_notes, start, end)}
+    def update_state() -> dict:
+        try:
+            disk_version = (paths.root / "VERSION").read_text(encoding="utf-8").strip()
+        except OSError:
+            disk_version = runtime.version
+        info = db.get_setting("update_info")
+        if isinstance(info, dict) and info.get("remote"):  # the cached check may predate an upgrade or rollback
+            info = {**info, "local": runtime.version, "newer": updater.is_newer(str(info["remote"]), runtime.version)}
+        return {
+            "settings": asdict(update_settings()), "has_token": secrets.get("github_token") != "", "token_hint": secrets.hint("github_token"),
+            "installed": runtime.version, "restart_needed": disk_version != runtime.version, "disk_version": disk_version,
+            "info": info if isinstance(info, dict) else None, "backups": updater.list_backups(paths.root),
+            "can_relaunch": os.name == "nt", "protected": list(updater.PROTECTED),
+        }
 
-    @app.post("/api/calendar")
-    async def calendar_add(payload: dict[str, Any] = Body(...)):
-        day, text = payload.get("day"), payload.get("text")
-        if not (isinstance(day, str) and DAY_RE.match(day)) or not isinstance(text, str) or not text.strip():
-            return JSONResponse({"detail": "Нужны дата и текст заметки."}, status_code=400)
-        if await asyncio.to_thread(db.day_note_count, day) >= 50:
-            return JSONResponse({"detail": "На один день можно добавить не больше 50 заметок."}, status_code=400)
-        return await asyncio.to_thread(db.add_event_note, day, text.strip()[:300])
+    @app.get("/api/update")
+    async def get_update():
+        return await asyncio.to_thread(update_state)
 
-    @app.delete("/api/calendar/{note_id}")
-    async def calendar_delete(note_id: int):
-        if not await asyncio.to_thread(db.delete_event_note, note_id):
-            return JSONResponse({"detail": "Заметка не найдена."}, status_code=404)
-        return {"deleted": note_id}
+    @app.put("/api/update/settings")
+    async def put_update_settings(payload: dict[str, Any] = Body(...)):
+        await asyncio.to_thread(db.set_setting, "update", asdict(updater.validate_settings(payload)))
+        return await asyncio.to_thread(update_state)
+
+    @app.put("/api/update/token")
+    async def put_update_token(payload: dict[str, Any] = Body(...)):
+        token = payload.get("token")
+        try:
+            if not isinstance(token, str):
+                raise ValueError
+            await asyncio.to_thread(secrets.set, "github_token", token)
+        except ValueError:
+            return JSONResponse({"detail": "Некорректный токен."}, status_code=400)
+        events.emit("Токен GitHub сохранён", event_type="settings")
+        return await asyncio.to_thread(update_state)
+
+    @app.delete("/api/update/token")
+    async def delete_update_token():
+        await asyncio.to_thread(secrets.delete, "github_token")
+        return await asyncio.to_thread(update_state)
+
+    @app.post("/api/update/check")
+    async def update_check():
+        cfg = await asyncio.to_thread(update_settings)
+        try:
+            info = await asyncio.to_thread(updater.check, cfg.repo, cfg.branch, secrets.get("github_token"), runtime.version)
+        except updater.UpdateError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=502)
+        await asyncio.to_thread(db.set_setting, "update_info", info)
+        return await asyncio.to_thread(update_state)
+
+    @app.post("/api/update/install")
+    async def update_install():
+        cfg = await asyncio.to_thread(update_settings)
+
+        def run() -> dict:
+            token = secrets.get("github_token")
+            files = updater.read_zip(updater.fetch_zip(cfg.repo, cfg.branch, token))
+            new_version = files["VERSION"].decode("utf-8", "replace").strip()
+            if not updater.is_newer(new_version, runtime.version):
+                raise updater.UpdateError(f"Установлена актуальная версия (v{runtime.version}), загруженная — v{new_version}.")
+            return updater.apply(paths.root, files, runtime.version)
+
+        try:
+            result = await asyncio.to_thread(run)
+        except updater.UpdateError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=409 if "актуальная" in str(exc) else 502)
+        events.emit(f"Проект обновлён до v{result['version']}", event_type="update", payload=result)
+        return {"result": result, "state": await asyncio.to_thread(update_state)}
+
+    @app.post("/api/update/rollback")
+    async def update_rollback():
+        try:
+            result = await asyncio.to_thread(updater.rollback, paths.root)
+        except updater.UpdateError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=409)
+        events.emit(f"Откат проекта к v{result['version']}", event_type="update", level="WARNING", payload=result)
+        return {"result": result, "state": await asyncio.to_thread(update_state)}
+
+    @app.post("/api/update/restart")
+    async def update_restart():
+        started = await asyncio.to_thread(updater.relaunch, paths.root)
+        if started and runtime.on_shutdown:
+            threading.Timer(0.6, runtime.on_shutdown).start()
+        return {"relaunched": started}
 
     @app.get("/api/events")
     async def recent_events(limit: int = 80):

@@ -299,20 +299,14 @@ def test_memory_endpoints_and_chat_uses_memory(monkeypatch, tmp_path: Path):
     assert client.delete(f"/api/memory/dialogs/{did}", headers=ACTION).status_code == 404
 
 
-def test_calendar_and_chat_export(tmp_path: Path):
+def test_chat_export_and_calendar_is_gone(tmp_path: Path):
     client, _, _ = make_client(tmp_path)
     establish_session(client)
-    assert client.get("/api/calendar?start=bad&end=x").status_code == 400
-    n = client.post("/api/calendar", headers=ACTION, json={"day": "2026-10-07", "text": "  встреча  "}).json()
-    assert n["text"] == "встреча"
-    assert client.post("/api/calendar", headers=ACTION, json={"day": "7.10", "text": "x"}).status_code == 400
-    notes = client.get("/api/calendar?start=2026-10-01&end=2026-10-31").json()["notes"]
-    assert [x["text"] for x in notes] == ["встреча"]
-    assert client.delete(f"/api/calendar/{n['id']}", headers=ACTION).status_code == 200
-    assert client.delete(f"/api/calendar/{n['id']}", headers=ACTION).status_code == 404
+    assert client.get("/api/calendar?start=2026-10-01&end=2026-10-31").status_code == 404  # the calendar feature was removed
     client.post("/api/chat", headers=ACTION, json={"text": "привет"})
     exp = client.get("/api/chat/export")
     assert exp.status_code == 200 and "attachment" in exp.headers["content-disposition"] and len(exp.json()["messages"]) == 2
+
 
 
 def test_stop_discards_the_answer_and_validates_request_id(monkeypatch, tmp_path: Path):
@@ -392,3 +386,71 @@ def test_extract_endpoint_summary_and_clear(monkeypatch, tmp_path: Path):
     monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: (_ for _ in ()).throw(OSError("down")))
     db.add_chat_message("user", "ещё сообщение")
     assert client.post("/api/memory/extract", headers=ACTION).status_code == 502
+
+
+def update_zip(version="9.9.9"):
+    import io, zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, content in {"VERSION": version + "\n", "main.py": "print(1)\n", "launcher.pyw": "#\n", "core/__init__.py": "", "core/new.py": "x=1\n", "data/steal.db": "x"}.items():
+            z.writestr(f"Aspksa-Kohakuyasha-abc/{name}", content)
+    return buf.getvalue()
+
+
+def test_update_flow_check_install_rollback(monkeypatch, tmp_path: Path):
+    from core import updater
+    client, db, runtime = make_client(tmp_path)
+    establish_session(client)
+    state = client.get("/api/update").json()
+    assert state["settings"]["repo"] == "Aspksa/Kohakuyasha" and state["info"] is None and state["installed"] == "0.1.1" and "data/" in state["protected"]
+    assert client.put("/api/update/settings", json={"repo": "x/y"}).status_code == 403  # needs the same-origin marker
+    r = client.put("/api/update/settings", headers=ACTION, json={"repo": "me/proj", "branch": "dev", "auto_check": False}).json()
+    assert r["settings"] == {"repo": "me/proj", "branch": "dev", "auto_check": False}
+
+    seen = {}
+
+    def fake_text(repo, branch, path, token, limit=0):
+        seen["token"] = token
+        return "9.9.9\n" if path == "VERSION" else json.dumps({"version": "9.9.9", "summary": "Большое обновление"}) + "\n"
+
+    monkeypatch.setattr(updater, "fetch_text", fake_text)
+    monkeypatch.setattr(updater, "fetch_commit", lambda *a: {"sha": "abc1234", "date": ""})
+    monkeypatch.setattr(updater, "fetch_zip", lambda *a: update_zip())
+    assert client.put("/api/update/token", headers=ACTION, json={"token": "bad token"}).status_code == 400
+    st = client.put("/api/update/token", headers=ACTION, json={"token": "ghp_secret1234567"}).json()
+    assert st["has_token"] is True and "secret" not in json.dumps(st)
+    info = client.post("/api/update/check", headers=ACTION).json()["info"]
+    assert info["newer"] is True and info["remote"] == "9.9.9" and info["notes"][0]["summary"] == "Большое обновление" and seen["token"] == "ghp_secret1234567"
+    assert client.get("/api/update").json()["info"]["remote"] == "9.9.9"  # cached
+
+    res = client.post("/api/update/install", headers=ACTION).json()
+    assert res["result"]["version"] == "9.9.9" and res["state"]["restart_needed"] is True and [b["to"] for b in res["state"]["backups"]] == ["9.9.9"]
+    assert (tmp_path / "VERSION").read_text().strip() == "9.9.9" and not (tmp_path / "data" / "steal.db").exists()
+    monkeypatch.setattr(updater, "fetch_zip", lambda *a: update_zip("0.0.1"))
+    assert client.post("/api/update/install", headers=ACTION).status_code == 409  # not newer than the running version
+
+    monkeypatch.setattr(updater, "fetch_zip", lambda *a: (_ for _ in ()).throw(updater.UpdateError("Нет связи с GitHub: x")))
+    r = client.post("/api/update/install", headers=ACTION)
+    assert r.status_code == 502 and "Нет связи" in r.json()["detail"]
+    rb = client.post("/api/update/rollback", headers=ACTION).json()
+    assert rb["result"]["version"] == "0.1.1" and not (tmp_path / "VERSION").exists() and rb["state"]["backups"] == []  # files the update added are removed again
+    assert client.delete("/api/update/token", headers=ACTION).json()["has_token"] is False
+    assert client.post("/api/update/restart", headers=ACTION).json() == {"relaunched": False}  # Linux: manual restart
+
+
+def test_update_errors_are_reported(monkeypatch, tmp_path: Path):
+    from core import updater
+    client, _, _ = make_client(tmp_path)
+    establish_session(client)
+    monkeypatch.setattr(updater, "fetch_text", lambda *a, **k: (_ for _ in ()).throw(updater.UpdateError("Репозиторий или ветка не найдены.")))
+    r = client.post("/api/update/check", headers=ACTION)
+    assert r.status_code == 502 and "не найдены" in r.json()["detail"]
+    assert client.post("/api/update/rollback", headers=ACTION).status_code == 409
+
+
+def test_static_files_use_revalidation_and_media_is_immutable(tmp_path: Path):
+    client, _, _ = make_client(tmp_path)
+    assert client.get("/static/app.css").headers["cache-control"] == "no-cache"
+    assert client.get("/").headers["cache-control"] == "no-store"
+    establish_session(client)
+    assert client.get("/api/settings").headers["cache-control"] == "no-store"

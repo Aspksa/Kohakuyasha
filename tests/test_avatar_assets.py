@@ -9,7 +9,7 @@ def test_avatar_widget_is_wired_into_index():
     for needle in ('id="avatar"', 'id="chat-panel"', 'id="cabinet-panel"', "/static/avatar.css", "/static/theme.js"):
         assert needle in html
     scripts = re.findall(r'src="/static/([\w.-]+\.js)"', html)
-    assert {"core.js", "avatar.js", "panels.js", "chat.js", "cabinet.js", "cab-avatar.js", "cab-ai.js", "cab-memory.js", "overview.js", "settings.js"} <= set(scripts)
+    assert {"core.js", "avatar.js", "panels.js", "chat.js", "cabinet.js", "cab-avatar.js", "cab-ai.js", "cab-memory.js", "overview.js", "settings.js", "update.js"} <= set(scripts)
     for script in scripts:
         assert (WEB / "static" / script).stat().st_size > 0, script
     for asset in ("avatar.png", "avatar-small.png", "avatar-full.png", "avatar.css", "app.css", "pattern.svg"):
@@ -21,7 +21,9 @@ def test_removed_pages_are_gone_from_the_menu():
     for gone in ('data-page="observe"', 'data-page="tests"', 'data-page="journal"', "Журнал событий", "mini-events"):
         assert gone not in html
     assert 'data-page="overview"' in html and 'data-page="settings"' in html
-    assert 'id="clock-time"' in html and 'id="cal-grid"' in html
+    assert 'data-page="update"' in html and 'id="page-update"' in html
+    for gone in ('id="clock-time"', 'id="cal-grid"', "calendar-card", "clock-card"):
+        assert gone not in html
 
 
 def test_ui_respects_strict_csp():

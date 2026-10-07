@@ -27,15 +27,19 @@ def test_validate_avatar():
 
 def test_secret_store_never_exposes_key(tmp_path: Path):
     store = ai.SecretStore(tmp_path / "data" / "secrets.json")
-    assert not store.has_key() and store.hint() == ""
+    assert not store.has_key() and store.hint("api_key") == ""
     store.set_key("sk-test-1234567890")
-    assert store.get_key() == "sk-test-1234567890" and store.hint() == "…7890"
+    assert store.get_key() == "sk-test-1234567890" and store.hint("api_key") == "…7890"
     public = ai.public_ai(ai.AISettings(), store)
     assert "sk-test" not in json.dumps(public) and public["has_key"] is True
     with pytest.raises(ValueError):
         store.set_key("has space")
+    store.set("github_token", "ghp_abcdefgh1234")
+    assert store.get("github_token") == "ghp_abcdefgh1234" and store.get_key() == "sk-test-1234567890"  # secrets do not clobber each other
     store.delete_key()
-    assert not store.has_key()
+    assert not store.has_key() and store.hint("github_token") == "…1234"
+    store.delete("github_token")
+    assert not (tmp_path / "data" / "secrets.json").exists()  # an empty secrets file is removed
 
 
 def test_normalize_history_alternates_and_starts_with_user():
