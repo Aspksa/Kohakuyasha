@@ -50,20 +50,110 @@ def explicit_remember(text: str) -> str | None:
     return m.group(2).strip() if m and m.group(2).strip() else None
 
 
+DEEP_MARKERS = (
+    "проанализ", "сравни", "разбер", "архитект", "спроект", "план", "стратег", "почему", "докажи",
+    "исправ", "ошиб", "баг", "код", "рефактор", "оптимиз", "безопас", "алгоритм", "математ",
+    "analy", "compare", "debug", "architect", "refactor", "optimiz", "strategy", "prove", "algorithm",
+)
+COGNITION_FAST = (
+    "Режим мышления: быстрый. Сначала определи реальную цель пользователя, затем дай прямой ответ. "
+    "Не повторяй очевидный контекст и не перегружай ответ лишними оговорками."
+)
+COGNITION_DEEP = (
+    "Режим мышления: глубокий. Перед ответом молча разложи задачу на части, проверь ограничения, зависимости, "
+    "противоречия и граничные случаи. Для технических задач сначала найди первопричину, затем предложи минимально "
+    "достаточное и проверяемое решение. Отделяй известное от предположений, не выдумывай факты. "
+    "Не показывай скрытую цепочку рассуждений: пользователю дай выводы, ключевые причины и конкретные действия."
+)
+REVIEW_SYSTEM = (
+    "Ты финальный редактор ответа Kohakuyasha. Проверь черновик на фактические ошибки, пропущенные ограничения, "
+    "внутренние противоречия и неисполненные части запроса. Сохрани правильные части и стиль. "
+    "Верни только улучшенный финальный ответ без анализа процесса, без упоминания черновика и без скрытой цепочки рассуждений."
+)
+
+
+def reasoning_mode(query: str) -> str:
+    """Cheap local router: use deep mode only for genuinely complex requests."""
+    text = (query or "").strip().lower()
+    if not text:
+        return "fast"
+    score = 0
+    if len(text) >= 220:
+        score += 1
+    if text.count("\n") >= 2 or (chr(96) * 3) in text:
+        score += 1
+    marker_hits = sum(1 for marker in DEEP_MARKERS if marker in text)
+    score += min(marker_hits, 2)
+    if len(text.split()) >= 14:
+        score += 1
+    if text.count("?") >= 2:
+        score += 1
+    if any(marker in text for marker in ("{", "}", "=>", "==", "::", "->")):
+        score += 1
+    return "deep" if score >= 2 else "fast"
+
+
+def cognition_block(query: str) -> str:
+    return COGNITION_DEEP if reasoning_mode(query) == "deep" else COGNITION_FAST
+
+
+def contextual_query(query: str, history: list[dict[str, Any]] | None = None, limit_chars: int = 1200) -> str:
+    """Expand only likely follow-ups; independent new topics must not inherit unrelated recent turns."""
+    current = query.strip() if isinstance(query, str) else ""
+    parts = [current] if current else []
+    lowered = current.lower()
+    followup_markers = ("а ", "и ", "но ", "она", "он ", "они", "это", "там", "тот ", "та ", "те ", "ещё", "теперь", "продолж")
+    likely_followup = len(tokens(current)) <= 7 or any(lowered.startswith(marker) for marker in followup_markers)
+    if not likely_followup:
+        return current[:limit_chars]
+    for item in reversed(history or []):
+        if item.get("role") != "user":
+            continue
+        text = item.get("content")
+        if not isinstance(text, str) or not text.strip() or text.strip() == current:
+            continue
+        parts.append(text.strip()[:400])
+        if len(parts) >= 3:
+            break
+    return "\n".join(parts)[:limit_chars]
+
+
 # ---------- selecting and formatting context ----------
 def select_facts(facts: list[dict[str, Any]], query: str, limit: int = 12, now: datetime | None = None) -> list[dict[str, Any]]:
+    """Rank memory by relevance first; pinned facts survive, unrelated facts stop flooding prompts."""
     q, now = tokens(query), now or datetime.now().astimezone()
-    scored = []
+    pinned: list[tuple[float, dict[str, Any]]] = []
+    relevant: list[tuple[float, dict[str, Any]]] = []
+    background: list[tuple[float, dict[str, Any]]] = []
     for f in facts:
-        overlap = len(q & tokens(f["text"]))
+        text = str(f.get("text", ""))
+        ft = tokens(text)
+        overlap = len(q & ft)
+        coverage = overlap / max(1, len(q)) if q else 0.0
+        related = similarity(query, text) if q else 0.0
         try:
             days = max(0.0, (now - datetime.fromisoformat(f["updated_at"])).total_seconds() / 86400)
         except (ValueError, KeyError, TypeError):
             days = 365.0
-        score = f.get("importance", 3) + overlap * 3 + (10 if f.get("pinned") else 0) + 1.0 / (1 + days / 30)
-        scored.append((score, f))
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [f for _, f in scored[:limit]]
+        recency = 1.0 / (1.0 + days / 30.0)
+        use_bonus = min(int(f.get("use_count", 0) or 0), 20) * 0.04
+        score = overlap * 4.0 + coverage * 3.0 + related * 4.0 + float(f.get("importance", 3)) * 0.7 + recency + use_bonus
+        if f.get("pinned"):
+            pinned.append((score + 20.0, f))
+        elif not q or overlap or related >= 0.28:
+            relevant.append((score, f))
+        else:
+            background.append((score, f))
+    pinned.sort(key=lambda x: x[0], reverse=True)
+    relevant.sort(key=lambda x: x[0], reverse=True)
+    background.sort(key=lambda x: x[0], reverse=True)
+    chosen = [f for _, f in pinned[:limit]]
+    remaining = limit - len(chosen)
+    chosen.extend(f for _, f in relevant[:remaining])
+    remaining = limit - len(chosen)
+    if remaining > 0:
+        chosen.extend(f for _, f in background[:min(2, remaining)])
+    return chosen
 
 
 def format_facts(facts: list[dict[str, Any]], limit_chars: int = 1800) -> str:
@@ -87,21 +177,29 @@ GUIDELINES = (
 )
 
 
-def build_context(db: Database, mem: MemorySettings, query: str, now: datetime | None = None) -> tuple[list[str], list[int]]:
-    """System-prompt blocks (time, facts, summary) and the ids of the facts that were used."""
+def build_context(
+    db: Database,
+    mem: MemorySettings,
+    query: str,
+    now: datetime | None = None,
+    history: list[dict[str, Any]] | None = None,
+) -> tuple[list[str], list[int]]:
+    """Compile the working context for one turn."""
     now = now or datetime.now()
-    blocks = [format_now(now)]
+    expanded_query = contextual_query(query, history)
+    blocks = [format_now(now), cognition_block(query)]
     used: list[int] = []
     if mem.use_facts:
-        chosen = select_facts(db.list_facts(MAX_FACTS), query)
+        chosen = select_facts(db.list_facts(MAX_FACTS), expanded_query)
         text = format_facts(chosen)
         if text:
-            blocks.append(text); used = [f["id"] for f in chosen]
+            blocks.append(text)
+            used = [f["id"] for f in chosen]
     if mem.use_summary:
         summary = (db.get_setting("memory_state", {}) or {}).get("summary", "")
         if summary:
             blocks.append("Краткое содержание более ранней части вашего общения:\n" + summary)
-    if len(blocks) > 1:
+    if len(blocks) > 2:
         blocks.append(GUIDELINES)
     return blocks, used
 

@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.10.1",
+  "current_version": "0.11.1",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "disk_design_v0.10.1",
+  "completed_stage": "disk_design_v0.11.1",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.10.1"
+    "note": "Run on PR for v0.11.1"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -150,5 +150,5 @@
     "disk_safe_preview_and_download",
     "disk_design_pass"
   ],
-  "next_action": "Create PR for v0.10.1 on user request, then stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments."
+  "next_action": "Create PR for v0.11.1 on user request, then stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments."
 }

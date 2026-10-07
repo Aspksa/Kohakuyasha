@@ -95,6 +95,24 @@ def test_http_error_is_sanitized(monkeypatch):
     assert "401" in str(exc.value) and "sk-secret-999" not in str(exc.value)
 
 
+def test_assistant_reviews_only_complex_requests(monkeypatch):
+    calls = []
+
+    def fake(url, headers, body):
+        calls.append(body)
+        return {"choices": [{"message": {"content": "Финальный ответ" if len(calls) > 1 else "Черновик"}}]}
+
+    monkeypatch.setattr(ai, "_http_post_json", fake)
+    settings = ai.AISettings()
+    simple = assistant.reply(settings, "key123456", {}, [{"role": "user", "content": "привет"}])
+    assert simple == "Черновик" and len(calls) == 1
+    calls.clear()
+    complex_q = "Проанализируй архитектуру кода, сравни два подхода и объясни почему? Какие граничные случаи проверить?"
+    improved = assistant.reply(settings, "key123456", {}, [{"role": "user", "content": complex_q}])
+    assert improved == "Финальный ответ" and len(calls) == 2
+    assert "финальный редактор" in calls[1]["messages"][0]["content"].lower()
+
+
 def test_assistant_not_connected_message():
     msgs = [{"role": "user", "content": "hi"}]
     assert assistant.reply(ai.AISettings(), "", {}, msgs) == assistant.NOT_CONNECTED  # no key yet

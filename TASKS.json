@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 19,
+  "next_id": 20,
   "tasks": [
     {
       "id": "task-001",
@@ -201,6 +201,22 @@
       "status": "queued",
       "depends_on": [
         "task-017"
+      ]
+    },
+    {
+      "id": "task-019",
+      "title": "v0.11.0 Brain v2: adaptive cognition and stronger contextual memory",
+      "priority": 100,
+      "status": "in_progress",
+      "depends_on": [
+        "task-017"
+      ],
+      "acceptance": [
+        "simple requests stay fast",
+        "complex requests get guarded second-pass review",
+        "follow-ups reuse conversational context",
+        "memory retrieval is relevance-first",
+        "Linux and Windows CI pass"
       ]
     }
   ]
