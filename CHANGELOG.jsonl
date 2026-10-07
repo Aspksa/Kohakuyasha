@@ -1,0 +1,1 @@
+{"id":"change-0001","date":"2026-10-07","version":"0.0.0","type":"project_init","status":"completed","summary":"Initialized Kohakuyasha as the repository-backed single source of truth.","files":["README.md","AGENTS.md","PROJECT_STATE.json","TASKS.json","CHANGELOG.jsonl","ERRORS.jsonl","DECISIONS.md","CHARACTER.json","VERSION"]}

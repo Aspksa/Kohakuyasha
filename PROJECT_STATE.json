@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "project": "Kohakuyasha",
+  "repository": "Aspksa/Kohakuyasha",
+  "source_of_truth": "repository",
+  "current_version": "0.0.0",
+  "status": "initialized",
+  "active_task_id": null,
+  "last_update": "2026-10-07",
+  "canonical_files": [
+    "AGENTS.md",
+    "PROJECT_STATE.json",
+    "TASKS.json",
+    "CHANGELOG.jsonl",
+    "ERRORS.jsonl",
+    "DECISIONS.md",
+    "CHARACTER.json",
+    "VERSION"
+  ],
+  "next_action": "Define the first implementation task."
+}
