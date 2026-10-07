@@ -3,10 +3,10 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.13.0",
-  "status": "brain_v4_ci_pending",
-  "completed_stage": "brain_v4_implementation",
-  "current_branch": "feat/brain-v4",
+  "current_version": "0.14.0",
+  "status": "brain_v5_ci_pending",
+  "completed_stage": "brain_v5_hybrid_memory_implementation",
+  "current_branch": "feat/brain-v5-hybrid-memory",
   "last_update": "2026-10-07",
   "canonical_files": [
     "AGENTS.md",
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Validate Brain v4 on Linux and Windows"
+    "note": "Validate Brain v5 hybrid memory on Linux and Windows"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -150,5 +150,5 @@
     "disk_safe_preview_and_download",
     "disk_design_pass"
   ],
-  "next_action": "Merge Brain v4 after green CI, then continue with semantic memory groundwork."
+  "next_action": "Merge Brain v5 after green CI, then evaluate true embedding backends without sacrificing portable Windows runtime."
 }
