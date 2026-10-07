@@ -6,10 +6,22 @@ WEB = Path(__file__).resolve().parents[1] / "web"
 
 def test_avatar_widget_is_wired_into_index():
     html = (WEB / "index.html").read_text(encoding="utf-8")
-    for needle in ('id="avatar"', 'id="chat-panel"', 'id="cabinet-panel"', "/static/avatar.js", "/static/avatar.css"):
+    for needle in ('id="avatar"', 'id="chat-panel"', 'id="cabinet-panel"', "/static/avatar.css", "/static/theme.js"):
         assert needle in html
-    for asset in ("avatar.js", "chat.js", "cabinet.js", "avatar.css", "avatar.png", "avatar-small.png", "avatar-full.jpg"):
+    scripts = re.findall(r'src="/static/([\w.-]+\.js)"', html)
+    assert {"core.js", "avatar.js", "panels.js", "chat.js", "cabinet.js", "cab-avatar.js", "cab-ai.js", "cab-memory.js", "overview.js", "settings.js"} <= set(scripts)
+    for script in scripts:
+        assert (WEB / "static" / script).stat().st_size > 0, script
+    for asset in ("avatar.png", "avatar-small.png", "avatar-full.jpg", "avatar.css", "app.css"):
         assert (WEB / "static" / asset).stat().st_size > 0
+
+
+def test_removed_pages_are_gone_from_the_menu():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    for gone in ('data-page="observe"', 'data-page="tests"', 'data-page="journal"', "Журнал событий", "mini-events"):
+        assert gone not in html
+    assert 'data-page="overview"' in html and 'data-page="settings"' in html
+    assert 'id="clock-time"' in html and 'id="cal-grid"' in html
 
 
 def test_ui_respects_strict_csp():
@@ -17,7 +29,7 @@ def test_ui_respects_strict_csp():
     html = (WEB / "index.html").read_text(encoding="utf-8")
     assert not re.search(r"\son\w+\s*=", html)
     assert "style=" not in html
-    for name in ("avatar.js", "chat.js", "cabinet.js"):
-        js = (WEB / "static" / name).read_text(encoding="utf-8")
+    for path in sorted((WEB / "static").glob("*.js")):
+        js = path.read_text(encoding="utf-8")
         assert "innerHTML" not in js and "insertAdjacentHTML" not in js  # chat text is untrusted: DOM nodes only
         assert "eval(" not in js

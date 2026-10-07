@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="dark" data-accent="gold" data-bg="glow">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -8,28 +8,39 @@
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/avatar.css">
+  <script src="/static/theme.js"></script>
 </head>
 <body>
   <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand"><img src="/static/logo.svg" alt=""><div><strong>Kohakuyasha</strong><span>личная система</span></div></div>
-      <nav>
+      <div class="brand"><img src="/static/logo.svg" data-logo alt=""><div><strong>Kohakuyasha</strong><span>личная система</span></div></div>
+      <nav class="menu">
         <button class="nav active" data-page="overview"><span>◈</span> Обзор</button>
-        <button class="nav" data-page="observe"><span>⌁</span> Наблюдение</button>
-        <button class="nav" data-page="tests"><span>✓</span> Тесты</button>
-        <button class="nav" data-page="journal"><span>≡</span> Журнал</button>
         <button class="nav" data-page="settings"><span>⚙</span> Настройки</button>
       </nav>
       <div class="side-foot"><div class="pulse-dot"></div><div><b id="side-status">Подключение</b><span id="side-action">Ожидание ядра</span></div></div>
     </aside>
     <main>
-      <header><div><p class="eyebrow">КОМАНДНЫЙ ЦЕНТР</p><h1>Kohakuyasha готовится к работе.</h1></div><div class="header-actions"><button class="icon-btn" id="refresh" title="Обновить">↻</button><button class="primary" id="quick-test">Быстрый тест</button></div></header>
-
       <section class="page active" id="page-overview">
+        <div class="page-head"><div><p class="eyebrow">ОБЗОР</p><h1 id="greeting">Добро пожаловать, господин.</h1></div><div class="header-actions"><button class="icon-btn" id="refresh" title="Обновить" aria-label="Обновить">↻</button></div></div>
         <div class="hero">
-          <div class="sigil-wrap"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="ring ring-three"></div><img src="/static/logo.svg" class="hero-logo" alt="Kohakuyasha"></div>
-          <div class="hero-copy"><span class="state-badge"><i></i><span id="hero-status">Подключение</span></span><h2>Kohakuyasha <em id="version">—</em></h2><p id="current-action">Ожидание ядра</p><div class="meter"><span id="activity-meter"></span></div></div>
+          <div class="sigil-wrap"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="ring ring-three"></div><img src="/static/logo.svg" data-logo class="hero-logo" alt="Kohakuyasha"></div>
+          <div class="hero-copy"><span class="state-badge"><i></i><span id="hero-status">Подключение</span></span><h2>Kohakuyasha <em id="version">—</em></h2><p id="current-action">Ожидание ядра</p><div class="meter"><span></span></div></div>
+        </div>
+        <div class="widgets">
+          <section class="panel clock-card" id="clock-card" aria-label="Время">
+            <div class="clock-greet" id="clock-greet"></div>
+            <div class="clock-time" id="clock-time">--:--</div>
+            <div class="clock-date" id="clock-date"></div>
+            <div class="clock-meta"><span class="pill" id="clock-tz"></span><span class="pill" id="clock-week"></span><span class="pill" id="clock-doy"></span></div>
+            <div><div class="daybar"><span id="daybar"></span></div><div class="daybar-label"><span>Прогресс дня</span><b id="daybar-pct">0%</b></div></div>
+          </section>
+          <section class="panel" id="calendar-card" aria-label="Календарь">
+            <div class="cal-head"><div class="cal-title" id="cal-title"></div><div class="cal-nav"><button id="cal-prev" aria-label="Предыдущий месяц">‹</button><button id="cal-today">Сегодня</button><button id="cal-next" aria-label="Следующий месяц">›</button></div></div>
+            <div class="cal-grid" id="cal-grid"></div>
+            <div class="notes"><h4 id="notes-title"></h4><div id="notes-list"></div><form class="note-form" id="note-form" autocomplete="off"><input id="note-input" maxlength="300" placeholder="Добавить заметку на этот день…" aria-label="Заметка"><button class="primary" type="submit">+</button></form></div>
+          </section>
         </div>
         <div class="stats">
           <article><span>CPU</span><strong id="cpu">—</strong><small>нагрузка системы</small></article>
@@ -37,56 +48,35 @@
           <article><span>Uptime</span><strong id="uptime">—</strong><small>текущая сессия</small></article>
           <article><span>Порт</span><strong id="port">—</strong><small>только localhost</small></article>
         </div>
-        <div class="grid-two">
-          <section class="panel"><div class="panel-head"><div><span class="eyebrow">СОСТОЯНИЕ</span><h3>Системы</h3></div><span class="ok-chip" id="overall-state">ПРОВЕРКА</span></div>
-            <div class="service-list">
-              <div><span><i class="led" id="led-core"></i>Ядро</span><b id="svc-core">—</b></div>
-              <div><span><i class="led" id="led-db"></i>SQLite</span><b id="svc-db">—</b></div>
-              <div><span><i class="led" id="led-web"></i>Web UI</span><b id="svc-web">—</b></div>
-              <div><span><i class="led" id="led-watchdog"></i>Watchdog</span><b id="svc-watchdog">—</b></div>
-            </div>
-          </section>
-          <section class="panel"><div class="panel-head"><div><span class="eyebrow">ПОСЛЕДНЕЕ</span><h3>Активность</h3></div><button class="text-btn" data-goto="journal">Весь журнал →</button></div><div id="mini-events" class="event-list compact"></div></section>
-        </div>
+        <section class="panel"><div class="panel-head"><div><span class="eyebrow">СОСТОЯНИЕ</span><h3>Системы</h3></div><span class="ok-chip" id="overall-state">ПРОВЕРКА</span></div>
+          <div class="service-list">
+            <div><span><i class="led" id="led-core"></i>Ядро</span><b id="svc-core">—</b></div>
+            <div><span><i class="led" id="led-db"></i>SQLite</span><b id="svc-db">—</b></div>
+            <div><span><i class="led" id="led-web"></i>Web UI</span><b id="svc-web">—</b></div>
+            <div><span><i class="led" id="led-watchdog"></i>Watchdog</span><b id="svc-watchdog">—</b></div>
+          </div>
+        </section>
       </section>
-
-      <section class="page" id="page-observe">
-        <div class="section-title"><div><p class="eyebrow">LIVE</p><h2>Наблюдение</h2></div><span class="state-badge"><i></i>поток событий</span></div>
-        <div class="observe-grid"><section class="panel live-panel"><div class="visual-core"><div class="orbit o1"></div><div class="orbit o2"></div><div class="orbit o3"></div><img src="/static/logo.svg" alt=""><span id="observe-action">Ожидание ядра</span></div></section>
-          <section class="panel"><div class="panel-head"><h3>Телеметрия</h3></div><div class="telemetry"><div><span>CPU</span><b id="obs-cpu">—</b></div><div><span>RAM</span><b id="obs-ram">—</b></div><div><span>Python</span><b id="python">—</b></div><div><span>PID</span><b id="pid">—</b></div></div></section></div>
-        <section class="panel"><div class="panel-head"><h3>События в реальном времени</h3><span class="live-label">● LIVE</span></div><div id="live-events" class="event-list"></div></section>
-      </section>
-
-      <section class="page" id="page-tests">
-        <div class="section-title"><div><p class="eyebrow">ДИАГНОСТИКА</p><h2>Тестовый центр</h2></div><div class="header-actions"><button id="export-diagnostics">Экспорт</button><button id="run-quick">Быстрый тест</button><button class="primary" id="run-full">Полная диагностика</button></div></div>
-        <section class="panel test-summary"><div><span class="eyebrow">РЕЗУЛЬТАТ</span><strong id="test-score">Ещё не запускалось</strong><small id="test-time">Проверим ядро, БД, файлы и окружение.</small></div><div class="score-ring" id="score-ring"><span>—</span></div></section>
-        <section class="panel"><div id="test-results" class="test-list"><div class="empty">Нажмите «Быстрый тест» или «Полная диагностика».</div></div></section>
-      </section>
-
-      <section class="page" id="page-journal"><div class="section-title"><div><p class="eyebrow">ИСТОРИЯ</p><h2>Журнал событий</h2></div><button id="journal-refresh">Обновить</button></div><section class="panel"><div id="journal-events" class="event-list journal"></div></section></section>
 
       <section class="page" id="page-settings">
-        <div class="section-title"><div><p class="eyebrow">КОНФИГУРАЦИЯ</p><h2>Настройки</h2></div></div>
-        <div class="grid-two">
-          <section class="panel setting-card"><div><h3>Автозапуск Windows</h3><p>Находит этот экземпляр Kohakuyasha даже после смены буквы переносного диска.</p></div><label class="switch"><input type="checkbox" id="autostart"><span></span></label></section>
-          <section class="panel setting-card"><div><h3>Локальная безопасность</h3><p>Host, Origin, локальная сессия и SameSite-cookie защищают API и WebSocket.</p></div><span class="ok-chip">ВКЛ</span></section>
-          <section class="panel setting-card"><div><h3>Перезапуск ядра</h3><p>Мягкий restart с повторным выбором свободного порта и backoff watchdog.</p></div><button id="restart-core">Перезапустить</button></section>
-          <section class="panel setting-card danger"><div><h3>Завершить работу</h3><p>Полностью закрывает Kohakuyasha и удаляет runtime-состояние.</p></div><button id="shutdown">Выход</button></section>
-        </div>
+        <div class="page-head"><div><p class="eyebrow">КОНФИГУРАЦИЯ</p><h1>Настройки</h1></div></div>
+        <div class="set-grid" id="settings-root"></div>
       </section>
     </main>
   </div>
   <div id="toast" class="toast"></div>
+
   <div id="avatar" class="avatar shape-soft glow" role="button" tabindex="0" aria-label="Kohakuyasha: нажмите — чат, правая кнопка — личный кабинет, перетаскивайте куда угодно" title="ЛКМ — чат · ПКМ — личный кабинет · перетащите, чтобы переместить">
     <img id="avatar-img" src="/static/avatar-small.png" alt="" draggable="false"><span class="avatar-dot"></span>
   </div>
 
   <section id="chat-panel" class="float-panel chat" hidden aria-label="Чат">
     <header class="fp-head">
-      <img class="fp-ava" src="/static/avatar-small.png" alt="">
+      <img class="fp-ava" data-face="small" src="/static/avatar-small.png" alt="">
       <div class="fp-title"><b>Kohakuyasha</b><span id="chat-status"><i class="dot"></i>загрузка…</span></div>
       <div class="fp-actions">
         <button class="fp-btn" data-act="new" title="Новый чат" aria-label="Новый чат">＋</button>
+        <button class="fp-btn" data-act="reset" title="Сбросить размер и положение" aria-label="Сбросить размер и положение">⌖</button>
         <button class="fp-btn" data-act="max" title="Развернуть" aria-label="Развернуть">⤢</button>
         <button class="fp-btn" data-close title="Закрыть" aria-label="Закрыть">×</button>
       </div>
@@ -104,25 +94,28 @@
 
   <section id="cabinet-panel" class="float-panel cabinet" hidden aria-label="Личный кабинет ИИ">
     <header class="fp-head">
-      <img class="fp-ava" src="/static/avatar-small.png" alt="">
+      <img class="fp-ava" data-face="small" src="/static/avatar-small.png" alt="">
       <div class="fp-title"><b>Kohakuyasha</b><span>личный кабинет</span></div>
       <div class="fp-actions">
+        <button class="fp-btn" data-act="reset" title="Сбросить размер и положение" aria-label="Сбросить размер и положение">⌖</button>
         <button class="fp-btn" data-act="max" title="Развернуть" aria-label="Развернуть">⤢</button>
         <button class="fp-btn" data-close title="Закрыть" aria-label="Закрыть">×</button>
       </div>
     </header>
-    <nav class="tabs" role="tablist">
-      <button class="tab active" role="tab" data-tab="profile">Профиль</button>
-      <button class="tab" role="tab" data-tab="avatar">Аватар</button>
-      <button class="tab" role="tab" data-tab="ai">ИИ</button>
-      <button class="tab" role="tab" data-tab="system">Система</button>
-    </nav>
+    <nav class="tabs" id="cabinet-tabs" role="tablist"></nav>
     <div id="cabinet-body" class="cabinet-body"></div>
   </section>
 
+  <script src="/static/core.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/overview.js"></script>
+  <script src="/static/settings.js"></script>
   <script src="/static/avatar.js"></script>
+  <script src="/static/panels.js"></script>
   <script src="/static/chat.js"></script>
   <script src="/static/cabinet.js"></script>
+  <script src="/static/cab-avatar.js"></script>
+  <script src="/static/cab-ai.js"></script>
+  <script src="/static/cab-memory.js"></script>
 </body>
 </html>

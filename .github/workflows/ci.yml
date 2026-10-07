@@ -53,11 +53,9 @@ jobs:
         run: python -m compileall -q core launcher.pyw main.py
 
       - name: Validate JavaScript syntax
+        shell: bash
         run: |
-          node --check web/static/app.js
-          node --check web/static/avatar.js
-          node --check web/static/chat.js
-          node --check web/static/cabinet.js
+          for f in web/static/*.js; do node --check "$f"; done
 
       - name: Parse Windows PowerShell scripts with Windows PowerShell
         if: runner.os == 'Windows'

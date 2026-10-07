@@ -88,7 +88,7 @@
     if (m.role === "user") {
       row.append(el("div", "bubble", m.content));
     } else {
-      const ava = el("img", "ava-mini"); ava.src = Koh.faceSrc; ava.alt = "";
+      const ava = Koh.faceImg("ava-mini");
       const body = el("div", "body"), content = el("div"), meta = el("div", "meta");
       content.append(renderMarkdown(m.content));
       const copy = el("button", "", "Копировать"); copy.type = "button"; copy.addEventListener("click", () => copyText(m.content, copy));
@@ -99,8 +99,7 @@
   }
   function addError(message) {
     removeEmpty();
-    const row = el("div", "row error"), ava = el("img", "ava-mini"), body = el("div", "body");
-    ava.src = Koh.faceSrc; ava.alt = "";
+    const row = el("div", "row error"), ava = Koh.faceImg("ava-mini"), body = el("div", "body");
     body.append(el("div", "", message));
     const btn = el("button", "", "Открыть настройки ИИ"); btn.type = "button";
     btn.addEventListener("click", () => { Koh.open("cabinet"); if (Koh.hooks.cabinetTab) Koh.hooks.cabinetTab("ai"); });
@@ -108,13 +107,13 @@
   }
   function setTyping(on) {
     if (on && !typingRow) {
-      typingRow = el("div", "row assistant"); const ava = el("img", "ava-mini"); ava.src = Koh.faceSrc; ava.alt = "";
+      typingRow = el("div", "row assistant"); const ava = Koh.faceImg("ava-mini");
       const body = el("div", "body"), t = el("div", "typing"); t.append(el("i"), el("i"), el("i")); body.append(t);
       typingRow.append(ava, body); log.append(typingRow); toBottom(true);
     } else if (!on && typingRow) { typingRow.remove(); typingRow = null; }
   }
   function renderEmpty() {
-    const box = el("div", "chat-empty"), im = el("img"); im.src = "/static/avatar.png"; im.alt = "";
+    const box = el("div", "chat-empty"), im = Koh.faceImg("", "big");
     const grid = el("div", "suggest");
     SUGGESTIONS.forEach(s => { const b = el("button", "", s); b.type = "button"; b.addEventListener("click", () => { input.value = s; autosize(); submit(); }); grid.append(b); });
     box.append(im, el("h2", "", "Чем могу помочь, господин?"), el("p", "", "Спросите о чём угодно или выберите подсказку."), grid);
@@ -163,6 +162,7 @@
     statusEl.replaceChildren(el("i", on ? "dot on" : "dot"), document.createTextNode(on ? `онлайн · ${ai.model || (ai.defaults && ai.defaults.models[ai.provider]) || ai.provider}` : "ИИ не подключён"));
   }
   Koh.onSettings(renderStatus);
+  Koh.hooks.chatReset = () => { if (loaded) renderEmpty(); };
   Koh.hooks.chat = () => { renderStatus(); setTimeout(() => input.focus(), 0); if (!loaded) load(); else toBottom(true); };
   renderStatus();
 })();
