@@ -385,7 +385,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         ready = settings.provider != "none" and secrets.has_key()
         history = await asyncio.to_thread(brain.history_window, db, mem)
         snippets = await asyncio.to_thread(db.search_memory, text, mem.max_snippets) if mem.enabled and ready else []
-        blocks, used_facts = (await asyncio.to_thread(brain.build_context, db, mem, text)) if ready else ([], [])
+        blocks, used_facts = (await asyncio.to_thread(brain.build_context, db, mem, text, None, history)) if ready else ([], [])
         character_data = await asyncio.to_thread(load_character)
         rid = payload.get("request_id") if isinstance(payload.get("request_id"), str) else ""
         try:
