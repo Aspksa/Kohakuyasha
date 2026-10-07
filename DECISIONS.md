@@ -59,3 +59,8 @@ Portable Python is pinned by `PYTHON_VERSION`. Python package versions are exact
 **Status:** Active
 
 `.kohakuyasha-id` is not committed. It is generated on first local use and is ignored by Git. Windows autostart searches attached drives for the exact instance ID, allowing drive-letter changes without treating every repository clone as the same installation.
+## D-011 — Windows CI is a required validation surface
+**Date:** 2026-10-07  
+**Status:** Active
+
+Every change targeting the Windows runtime must pass the GitHub Actions Windows job before merge. The CI also runs on Linux to catch portability regressions. Python is selected from `PYTHON_VERSION`; Windows PowerShell scripts are parsed by Windows PowerShell 5.1. Physical tray/removable-drive/autostart behavior still requires a real Windows integration check.
