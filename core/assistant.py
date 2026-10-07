@@ -33,4 +33,7 @@ def reply(
         "Черновик ответа:\n" + draft[:12000]
     )
     review_system = system + "\n\n" + brain.REVIEW_SYSTEM
-    return ai.complete(settings, api_key, review_system, [{"role": "user", "content": review_prompt}])
+    try:
+        return ai.complete(settings, api_key, review_system, [{"role": "user", "content": review_prompt}])
+    except ai.AIError:
+        return draft
