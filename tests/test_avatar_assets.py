@@ -12,7 +12,7 @@ def test_avatar_widget_is_wired_into_index():
     assert {"core.js", "avatar.js", "panels.js", "chat.js", "cabinet.js", "cab-avatar.js", "cab-ai.js", "cab-memory.js", "overview.js", "settings.js"} <= set(scripts)
     for script in scripts:
         assert (WEB / "static" / script).stat().st_size > 0, script
-    for asset in ("avatar.png", "avatar-small.png", "avatar-full.jpg", "avatar.css", "app.css"):
+    for asset in ("avatar.png", "avatar-small.png", "avatar-full.jpg", "avatar.css", "app.css", "pattern.svg"):
         assert (WEB / "static" / asset).stat().st_size > 0
 
 

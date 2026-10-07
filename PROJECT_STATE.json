@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.4.0",
+  "current_version": "0.5.0",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "ui_overhaul_memory_cloudru_v0.4.0",
+  "completed_stage": "design_kitsune_v0.5.0",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "65/65 passed",
+      "linux": "67/67 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.4.0"
+    "note": "Run on PR for v0.5.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -103,7 +103,14 @@
     "cloudru_provider",
     "dialog_import_memory_fts",
     "calendar_notes",
-    "chat_export"
+    "chat_export",
+    "kitsune_design_system",
+    "seigaiha_pattern_and_petals",
+    "unified_card_and_button_tokens",
+    "chat_day_separators",
+    "chat_stop_generating",
+    "cabinet_card_sections_and_sticky_actions",
+    "overview_upcoming_notes"
   ],
-  "next_action": "Merge v0.4.0 after green Windows+Linux CI; verify on physical Windows (panels resize, uploads, theme switching, memory import, Cloud.ru key); then consider semantic memory and automatic fact extraction."
+  "next_action": "Merge v0.5.0 after green Windows+Linux CI; verify the look on physical Windows (all three themes), then continue with semantic memory (task-010) or the next requested change."
 }

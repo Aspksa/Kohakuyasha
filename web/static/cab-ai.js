@@ -28,7 +28,8 @@
       baseField.hidden = !(p === "openai" || p === "cloudru"); modelField.hidden = p === "none"; hint.textContent = HINTS[p] || "";
     };
     provider.addEventListener("change", sync);
-    nodes.push(ui.field("Провайдер", provider), hint, modelField, datalist, baseField);
+    const secConn = ui.section("ПОДКЛЮЧЕНИЕ"), secGen = ui.section("ГЕНЕРАЦИЯ"), secChar = ui.section("ХАРАКТЕР И ИНСТРУКЦИЯ");
+    secConn.append(ui.field("Провайдер", provider), hint, modelField, datalist, baseField);
 
     const key = el("input"); key.type = "password"; key.autocomplete = "off"; key.placeholder = "Вставьте API-ключ"; key.maxLength = 500;
     const keyInfo = el("p", "hint"), keyBtns = el("div", "actions");
@@ -44,30 +45,30 @@
     });
     const showKey = () => { keyInfo.textContent = s.has_key ? `Ключ сохранён (${s.key_hint}). Он хранится только в data/secrets.json на этом компьютере и никогда не показывается обратно.` : "Ключ не задан. Он будет храниться только в data/secrets.json на этом компьютере."; delKey.hidden = !s.has_key; };
     keyBtns.append(saveKey, delKey);
-    nodes.push(ui.field("API-ключ", key), keyInfo, keyBtns);
+    secConn.append(ui.field("API-ключ", key), keyInfo, keyBtns);
 
     const autoRow = ui.toggle("Температура: авто (рекомендуется)", s.temperature === null || s.temperature === undefined, () => syncTemp());
     const autoBox = autoRow.querySelector("input"), temp = el("input"), tempLabel = el("label", "");
     temp.type = "range"; temp.min = 0; temp.max = 1; temp.step = 0.05; temp.value = s.temperature ?? 0.7;
     const syncTemp = () => { temp.disabled = autoBox.checked; tempLabel.textContent = autoBox.checked ? "Температура: по умолчанию провайдера" : `Температура: ${Number(temp.value).toFixed(2)}`; };
     temp.addEventListener("input", syncTemp);
-    const tf = el("div", "field"); tf.append(autoRow, tempLabel, temp); nodes.push(tf);
+    const tf = el("div", "field"); tf.append(autoRow, tempLabel, temp); secGen.append(tf);
     const maxTokens = el("input"); maxTokens.type = "number"; maxTokens.min = 64; maxTokens.max = 8192; maxTokens.value = s.max_tokens || 1024;
-    nodes.push(ui.field("Максимальная длина ответа (токены)", maxTokens));
-    const charRow = ui.toggle("Играть роль из профиля персонажа", s.use_character !== false, () => {}); nodes.push(charRow);
+    secGen.append(ui.field("Максимальная длина ответа (токены)", maxTokens));
+    const charRow = ui.toggle("Играть роль из профиля персонажа", s.use_character !== false, () => {}); secChar.append(charRow);
     const prompt = el("textarea"); prompt.value = s.system_prompt || ""; prompt.maxLength = 8000; prompt.placeholder = "Например: отвечай кратко, обращайся ко мне «господин»…";
-    nodes.push(ui.field("Дополнительная инструкция", prompt, "Добавляется к образу персонажа и отправляется провайдеру в каждом запросе."));
+    secChar.append(ui.field("Дополнительная инструкция", prompt, "Добавляется к образу персонажа и отправляется провайдеру в каждом запросе."));
 
     const collect = () => ({provider: provider.value, model: model.value.trim(), base_url: baseUrl.value.trim(), temperature: autoBox.checked ? null : Number(temp.value), max_tokens: Number(maxTokens.value) || 1024, system_prompt: prompt.value, use_character: charRow.querySelector("input").checked});
     const persist = async () => { const r = await Koh.api("/api/settings/ai", {method: "PUT", body: JSON.stringify(collect())}); Koh.settings.ai = r; Object.assign(s, r); Koh.notify(); };
-    const act = el("div", "actions");
+    const act = el("div", "actions sticky");
     const test = ui.btn("Проверить подключение", "", async () => {
       test.disabled = true; ui.setStatus(status, true, "Проверяю подключение…");
       try { await persist(); const r = await Koh.api("/api/ai/test", {method: "POST", body: "{}"}); ui.setStatus(status, r.ok, r.ok ? `Подключение работает. Ответ: ${r.detail}` : r.detail); }
       catch { ui.setStatus(status, false, "Не удалось выполнить проверку."); } finally { test.disabled = false; }
     });
     act.append(ui.btn("Сохранить настройки", "primary", async () => { try { await persist(); ui.setStatus(status, true, "Настройки сохранены."); } catch { ui.setStatus(status, false, "Не удалось сохранить настройки."); } }), test);
-    nodes.push(act, status);
+    nodes.push(secConn, secGen, secChar, status, act);
     sync(); syncTemp(); showKey();
     return nodes;
   }, 30);

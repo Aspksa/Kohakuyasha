@@ -92,6 +92,8 @@ class AppSettings:
     clock_24h: bool = True
     clock_seconds: bool = True
     week_start: int = 1         # 1 = Monday, 0 = Sunday
+    pattern: bool = True        # soft seigaiha wave pattern in the background
+    petals: bool = True         # falling sakura petals
 
 
 ACCENTS = ("gold", "rose", "violet", "blue", "green", "red")
@@ -116,6 +118,8 @@ def validate_app(raw: dict[str, Any] | None) -> AppSettings:
         clock_24h=_bool(raw.get("clock_24h"), d.clock_24h),
         clock_seconds=_bool(raw.get("clock_seconds"), d.clock_seconds),
         week_start=0 if raw.get("week_start") in (0, "0") else 1,
+        pattern=_bool(raw.get("pattern"), d.pattern),
+        petals=_bool(raw.get("petals"), d.petals),
     )
 
 

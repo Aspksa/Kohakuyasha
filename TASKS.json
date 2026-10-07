@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 11,
+  "next_id": 12,
   "tasks": [
     {
       "id": "task-001",
@@ -119,6 +119,16 @@
         "embedding or hybrid search",
         "editable facts list in cabinet"
       ]
+    },
+    {
+      "id": "task-011",
+      "title": "Design pass v0.5.0: kitsune style, unified components, theme contrast, cabinet polish, chat day separators and Stop",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-009"
+      ],
+      "result": "See CHANGELOG change-0011."
     }
   ]
 }

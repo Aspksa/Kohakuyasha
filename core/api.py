@@ -5,6 +5,7 @@ import json
 import re
 import secrets as pysecrets
 import threading
+import time
 from dataclasses import asdict
 from typing import Any
 
@@ -25,6 +26,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     app = FastAPI(title="Kohakuyasha", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=paths.static), name="static")
     diagnostics_lock = asyncio.Lock()
+    cancelled_requests: dict[str, float] = {}
     secrets = ai.SecretStore(paths.secrets)
 
     def load_character() -> dict:
@@ -375,17 +377,32 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         mem = await asyncio.to_thread(memory_settings)
         history = await asyncio.to_thread(db.recent_chat, 60)
         snippets = await asyncio.to_thread(db.search_memory, text, mem.max_snippets) if mem.enabled and settings.provider != "none" else []
+        character_data = await asyncio.to_thread(load_character)
+        rid = payload.get("request_id") if isinstance(payload.get("request_id"), str) else ""
         try:
-            answer = await asyncio.to_thread(
-                assistant.reply, settings, secrets.get_key(), await asyncio.to_thread(load_character), history, snippets
-            )
+            answer = await asyncio.to_thread(assistant.reply, settings, secrets.get_key(), character_data, history, snippets)
         except ai.AIError as exc:
+            cancelled_requests.pop(rid, None)
             return {"messages": [user_message], "error": str(exc)}
+        if rid and cancelled_requests.pop(rid, None) is not None:
+            # The user pressed "Stop" while the provider was working: the call cannot be aborted mid-flight, so its answer is discarded.
+            return {"messages": [user_message], "cancelled": True}
         assistant_message = await asyncio.to_thread(db.add_chat_message, "assistant", answer)
         if mem.learn_chat and settings.provider != "none":
             await asyncio.to_thread(db.add_learned, "user", text)
             await asyncio.to_thread(db.add_learned, "assistant", answer)
         return {"messages": [user_message, assistant_message]}
+
+    @app.post("/api/chat/cancel")
+    async def chat_cancel(payload: dict[str, Any] = Body(...)):
+        rid = payload.get("request_id")
+        if not isinstance(rid, str) or not 0 < len(rid) <= 64:
+            return JSONResponse({"detail": "Нужен request_id."}, status_code=400)
+        now = time.monotonic()
+        for key in [k for k, t in cancelled_requests.items() if now - t > 600]:
+            cancelled_requests.pop(key, None)
+        cancelled_requests[rid] = now
+        return {"cancelled": rid}
 
     @app.get("/api/chat/export")
     async def chat_export():

@@ -66,6 +66,8 @@
     const zl = el("label", "", `Масштаб содержимого: ${a.ui_zoom}%`);
     zoom.addEventListener("input", () => { zl.textContent = `Масштаб содержимого: ${zoom.value}%`; change({ui_zoom: Number(zoom.value)}); });
     const zf = el("div", "sfield"); zf.append(zl, zoom); look.append(zf);
+    look.append(row("Узор «волны»", "Едва заметный японский узор на фоне", sw(a.pattern, v => change({pattern: v}))));
+    look.append(row("Лепестки сакуры", "Медленно падающие лепестки на фоне", sw(a.petals, v => change({petals: v}))));
     look.append(row("Анимации", "Отключите, если интерфейс кажется тяжёлым", sw(a.animations, v => change({animations: v}))));
     nodes.push(look);
 

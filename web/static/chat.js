@@ -11,7 +11,7 @@
   const downBtn = document.getElementById("chat-down");
   const statusEl = document.getElementById("chat-status");
   const SUGGESTIONS = ["Расскажи о себе", "Составь план на день", "Объясни, как ты работаешь", "Придумай идею проекта"];
-  let loaded = false, sending = false, typingRow = null;
+  let loaded = false, sending = false, typingRow = null, lastDay = "", abortCtl = null;
 
   // ---------- safe Markdown-lite renderer (DOM nodes only) ----------
   function safeUrl(text) {
@@ -81,19 +81,28 @@
   function timeOf(iso) { try { return new Date(iso).toLocaleTimeString("ru-RU", {hour: "2-digit", minute: "2-digit"}); } catch { return ""; } }
   function removeEmpty() { const e = log.querySelector(".chat-empty"); if (e) e.remove(); }
 
+  const dayKey = (iso) => { try { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; } catch { return ""; } };
+  function dayLabel(iso) {
+    const d = new Date(iso), now = new Date(), diff = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    if (diff === 0) return "Сегодня"; if (diff === 1) return "Вчера";
+    return d.toLocaleDateString("ru-RU", {day: "numeric", month: "long", ...(d.getFullYear() !== now.getFullYear() ? {year: "numeric"} : {})});
+  }
   function addMessage(m, force) {
     removeEmpty();
     const stick = force || nearBottom();
+    const key = dayKey(m.created_at);
+    if (key && key !== lastDay) { lastDay = key; log.append(el("div", "daysep", dayLabel(m.created_at))); }
     const row = el("div", `row ${m.role}`);
     if (m.role === "user") {
       row.append(el("div", "bubble", m.content));
     } else {
       const ava = Koh.faceImg("ava-mini");
-      const body = el("div", "body"), content = el("div"), meta = el("div", "meta");
+      const body = el("div", "body"), content = el("div"), meta = el("div", "meta"), who = el("div", "who", "Kohakuyasha");
+      who.append(el("small", "", timeOf(m.created_at)));
       content.append(renderMarkdown(m.content));
       const copy = el("button", "", "Копировать"); copy.type = "button"; copy.addEventListener("click", () => copyText(m.content, copy));
-      meta.append(el("span", "", timeOf(m.created_at)), copy);
-      body.append(content, meta); row.append(ava, body);
+      meta.append(copy);
+      body.append(who, content, meta); row.append(ava, body);
     }
     log.append(row); if (stick) toBottom(true);
   }
@@ -108,7 +117,7 @@
   function setTyping(on) {
     if (on && !typingRow) {
       typingRow = el("div", "row assistant"); const ava = Koh.faceImg("ava-mini");
-      const body = el("div", "body"), t = el("div", "typing"); t.append(el("i"), el("i"), el("i")); body.append(t);
+      const body = el("div", "body"), t = el("div", "typing"), who = el("div", "who", "Kohakuyasha"); t.append(el("i"), el("i"), el("i")); body.append(who, t);
       typingRow.append(ava, body); log.append(typingRow); toBottom(true);
     } else if (!on && typingRow) { typingRow.remove(); typingRow = null; }
   }
@@ -117,30 +126,39 @@
     const grid = el("div", "suggest");
     SUGGESTIONS.forEach(s => { const b = el("button", "", s); b.type = "button"; b.addEventListener("click", () => { input.value = s; autosize(); submit(); }); grid.append(b); });
     box.append(im, el("h2", "", "Чем могу помочь, господин?"), el("p", "", "Спросите о чём угодно или выберите подсказку."), grid);
-    log.replaceChildren(box);
+    lastDay = ""; log.replaceChildren(box);
   }
 
   // ---------- data flow ----------
   async function load() {
     try {
       const d = await api("/api/chat?limit=200");
-      loaded = true; log.replaceChildren();
+      loaded = true; log.replaceChildren(); lastDay = "";
       if (!d.messages.length) renderEmpty(); else { d.messages.forEach(m => addMessage(m, true)); toBottom(true); }
     } catch { log.replaceChildren(); addError("Не удалось загрузить историю чата."); }
   }
+  let requestId = "";
+  function stopGenerating() {
+    if (requestId) Koh.api("/api/chat/cancel", {method: "POST", body: JSON.stringify({request_id: requestId})}).catch(() => {});
+    if (abortCtl) abortCtl.abort();
+  }
   async function submit() {
+    if (sending) { stopGenerating(); return; }
     const text = input.value.trim();
-    if (!text || sending) return;
-    sending = true; input.value = ""; autosize(); updateSend();
+    if (!text) return;
+    sending = true; abortCtl = new AbortController(); requestId = Math.random().toString(36).slice(2) + Date.now().toString(36); input.value = ""; autosize(); updateSend();
     addMessage({role: "user", content: text, created_at: new Date().toISOString()}, true);
     setTyping(true);
     try {
-      const d = await api("/api/chat", {method: "POST", body: JSON.stringify({text})});
+      const d = await api("/api/chat", {method: "POST", body: JSON.stringify({text, request_id: requestId}), signal: abortCtl.signal});
       setTyping(false);
       d.messages.filter(m => m.role === "assistant").forEach(m => addMessage(m, true));
       if (d.error) addError(d.error);
-    } catch { setTyping(false); addError("Не удалось отправить сообщение. Проверьте, что Kohakuyasha запущена."); }
-    finally { sending = false; updateSend(); input.focus(); }
+    } catch (e) {
+      setTyping(false);
+      if (e && e.name === "AbortError") { log.append(el("div", "daysep", "Ответ остановлен")); toBottom(true); }
+      else addError("Не удалось отправить сообщение. Проверьте, что Kohakuyasha запущена.");
+    } finally { sending = false; abortCtl = null; updateSend(); input.focus(); }
   }
   async function newChat() {
     if (!confirm("Начать новый чат? Текущая история будет удалена.")) return;
@@ -149,9 +167,13 @@
 
   // ---------- composer ----------
   function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
-  function updateSend() { sendBtn.disabled = sending || !input.value.trim(); }
+  function updateSend() {
+    sendBtn.classList.toggle("stop", sending); sendBtn.textContent = sending ? "■" : "↑";
+    sendBtn.title = sending ? "Остановить" : "Отправить"; sendBtn.setAttribute("aria-label", sending ? "Остановить" : "Отправить");
+    sendBtn.disabled = !sending && !input.value.trim();
+  }
   input.addEventListener("input", () => { autosize(); updateSend(); });
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!sending) submit(); } });
   form.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
   scroller.addEventListener("scroll", () => { downBtn.hidden = nearBottom(); });
   downBtn.addEventListener("click", () => toBottom(true));
