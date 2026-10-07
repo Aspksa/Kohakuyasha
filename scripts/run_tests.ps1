@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Root)
+﻿param([Parameter(Mandatory=$true)][string]$Root)
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path $Root).Path.TrimEnd("\")
 $DevVenv = Join-Path $Root ".runtime\dev-venv"
