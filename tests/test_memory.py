@@ -70,23 +70,6 @@ def test_calendar_notes(tmp_path: Path):
     assert db.delete_event_note(a["id"]) and not db.delete_event_note(a["id"])
 
 
-def test_cloudru_provider_uses_openai_compatible_path(monkeypatch):
-    seen = {}
-
-    def fake(url, headers, body):
-        seen.update(url=url, headers=headers, body=body)
-        return {"choices": [{"message": {"content": "привет"}}]}
-
-    monkeypatch.setattr(ai, "_http_post_json", fake)
-    s = ai.validate_ai({"provider": "cloudru"})
-    assert s.provider == "cloudru"
-    with pytest.raises(ai.AIError, match="ключ"):
-        ai.complete(s, "", "", [{"role": "user", "content": "x"}])
-    assert ai.complete(s, "k12345678", "sys", [{"role": "user", "content": "x"}]) == "привет"
-    assert seen["url"] == "https://foundation-models.api.cloud.ru/v1/chat/completions"
-    assert seen["headers"]["Authorization"] == "Bearer k12345678" and seen["body"]["model"] == "openai/gpt-oss-120b"
-
-
 def test_memory_is_formatted_into_system_prompt():
     prompt = ai.build_system_prompt(ai.AISettings(provider="cloudru"), {}, [{"title": "Про кошек", "role": "user", "content": "кошка Мурка"}])
     assert "Мурка" in prompt and "Про кошек" in prompt

@@ -9,11 +9,12 @@ from core import ai, assistant, prefs
 
 def test_validate_ai_clamps_and_rejects_bad_values():
     s = ai.validate_ai({"provider": "evil", "temperature": 7, "max_tokens": 10**9, "base_url": "file:///etc/passwd", "use_character": "yes"})
-    assert s.provider == "none" and s.temperature == 1.0 and s.max_tokens == 8192
+    assert s.provider == "cloudru" and s.temperature == 1.0 and s.max_tokens == 8192  # unknown/legacy providers fall back to Cloud.ru
+    assert ai.validate_ai({"provider": "anthropic"}).provider == "cloudru" and ai.validate_ai({"provider": "none"}).provider == "none"
     assert s.base_url == "" and s.use_character is True
     assert ai.validate_ai({"temperature": True}).temperature is None
     assert ai.validate_ai({"base_url": "http://127.0.0.1:11434/v1/"}).base_url == "http://127.0.0.1:11434/v1"
-    assert ai.validate_ai(None).provider == "none"
+    assert ai.validate_ai(None).provider == "cloudru"
 
 
 def test_validate_avatar():
@@ -45,42 +46,37 @@ def test_normalize_history_alternates_and_starts_with_user():
     assert msgs == [{"role": "user", "content": "a\n\nb"}, {"role": "assistant", "content": "c"}]
 
 
-def test_anthropic_request_shape(monkeypatch):
+def test_cloudru_request_shape(monkeypatch):
     seen = {}
 
     def fake(url, headers, body):
         seen.update(url=url, headers=headers, body=body)
-        return {"content": [{"type": "text", "text": "Привет"}]}
+        return {"choices": [{"message": {"content": "Привет"}}]}
 
     monkeypatch.setattr(ai, "_http_post_json", fake)
-    s = ai.AISettings(provider="anthropic", system_prompt="be brief")
+    s = ai.AISettings(system_prompt="be brief")
     out = ai.complete(s, "key123456", ai.build_system_prompt(s, {"name": "K"}), [{"role": "user", "content": "x"}])
     assert out == "Привет"
-    assert seen["url"] == "https://api.anthropic.com/v1/messages"
-    assert seen["headers"]["x-api-key"] == "key123456"
-    assert "temperature" not in seen["body"] and "be brief" in seen["body"]["system"] and '"name": "K"' in seen["body"]["system"]
-    assert seen["body"]["model"] == ai.DEFAULT_MODELS["anthropic"]
+    assert seen["url"] == "https://foundation-models.api.cloud.ru/v1/chat/completions"
+    assert seen["headers"] == {"Authorization": "Bearer key123456"}
+    assert seen["body"]["model"] == "deepseek-ai/DeepSeek-V4-Flash" and "temperature" not in seen["body"]
+    assert seen["body"]["messages"][0]["role"] == "system" and '"name": "K"' in seen["body"]["messages"][0]["content"]
+    pro = ai.AISettings(model="deepseek-ai/DeepSeek-V4-Pro", temperature=0.3, base_url="https://example.test/v1")
+    ai.complete(pro, "key123456", "", [{"role": "user", "content": "x"}])
+    assert seen["url"] == "https://example.test/v1/chat/completions" and seen["body"]["model"].endswith("V4-Pro") and seen["body"]["temperature"] == 0.3
 
 
-def test_openai_compatible_local_needs_no_key(monkeypatch):
-    seen = {}
-
-    def fake(url, headers, body):
-        seen.update(url=url, headers=headers, body=body)
-        return {"choices": [{"message": {"content": "ok"}}]}
-
-    monkeypatch.setattr(ai, "_http_post_json", fake)
-    s = ai.AISettings(provider="openai", base_url="http://127.0.0.1:11434/v1", temperature=0.3, model="llama3")
-    assert ai.complete(s, "", "sys", [{"role": "user", "content": "x"}]) == "ok"
-    assert seen["url"] == "http://127.0.0.1:11434/v1/chat/completions" and "Authorization" not in seen["headers"]
-    assert seen["body"]["messages"][0] == {"role": "system", "content": "sys"} and seen["body"]["temperature"] == 0.3
+def test_models_offered_are_deepseek_v4():
+    ids = [m["id"] for m in ai.MODEL_SUGGESTIONS["cloudru"]]
+    assert ids == ["deepseek-ai/DeepSeek-V4-Flash", "deepseek-ai/DeepSeek-V4-Pro"]
+    assert ai.PROVIDERS == ("none", "cloudru")
 
 
-def test_missing_key_and_provider_errors(monkeypatch):
+def test_missing_key_and_disabled_errors():
     with pytest.raises(ai.AIError):
-        ai.complete(ai.AISettings(provider="none"), "", "", [{"role": "user", "content": "x"}])
+        ai.complete(ai.AISettings(provider="none"), "k", "", [{"role": "user", "content": "x"}])
     with pytest.raises(ai.AIError, match="ключ"):
-        ai.complete(ai.AISettings(provider="anthropic"), "", "", [{"role": "user", "content": "x"}])
+        ai.complete(ai.AISettings(), "", "", [{"role": "user", "content": "x"}])
 
 
 def test_http_error_is_sanitized(monkeypatch):
@@ -91,13 +87,15 @@ def test_http_error_is_sanitized(monkeypatch):
 
     monkeypatch.setattr(ai, "_http_post_json", boom)
     with pytest.raises(ai.AIError) as exc:
-        ai.complete(ai.AISettings(provider="anthropic"), "sk-secret-999", "", [{"role": "user", "content": "x"}])
+        ai.complete(ai.AISettings(), "sk-secret-999", "", [{"role": "user", "content": "x"}])
     assert "401" in str(exc.value) and "sk-secret-999" not in str(exc.value)
 
 
 def test_assistant_not_connected_message():
-    out = assistant.reply(ai.AISettings(), "", {}, [{"role": "user", "content": "hi"}])
-    assert out == assistant.NOT_CONNECTED
+    msgs = [{"role": "user", "content": "hi"}]
+    assert assistant.reply(ai.AISettings(), "", {}, msgs) == assistant.NOT_CONNECTED  # no key yet
+    assert assistant.reply(ai.AISettings(provider="none"), "k", {}, msgs) == assistant.NOT_CONNECTED
+    assert "Cloud.ru" in assistant.NOT_CONNECTED
 
 
 def test_new_appearance_flags_are_validated():

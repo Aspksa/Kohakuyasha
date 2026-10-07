@@ -15,6 +15,12 @@ ORIGIN = "http://127.0.0.1:8710"
 ACTION = {"Origin": ORIGIN, "X-Kohakuyasha-Request": "1"}
 
 
+def connect_ai(client, **extra):
+    """Select Cloud.ru and store a dummy key so the assistant is 'connected'."""
+    client.put("/api/settings/ai", headers=ACTION, json={"provider": "cloudru", **extra})
+    assert client.put("/api/ai/key", headers=ACTION, json={"key": "sk-test-12345678"}).status_code == 200
+
+
 def make_client(tmp_path: Path):
     web = tmp_path / "web"
     static = web / "static"
@@ -161,11 +167,11 @@ def test_settings_roundtrip_and_key_is_never_returned(tmp_path: Path):
     client, db, _ = make_client(tmp_path)
     establish_session(client)
     d = client.get("/api/settings").json()
-    assert d["avatar"]["shape"] == "soft" and d["ai"]["provider"] == "none" and d["ai"]["has_key"] is False
+    assert d["avatar"]["shape"] == "soft" and d["ai"]["provider"] == "cloudru" and d["ai"]["has_key"] is False
     r = client.put("/api/settings/avatar", headers=ACTION, json={"shape": "circle", "size": 120, "crop": "full"})
     assert r.json()["shape"] == "circle"
     assert client.get("/api/settings").json()["avatar"]["size"] == 120
-    r = client.put("/api/settings/ai", headers=ACTION, json={"provider": "anthropic", "model": "m", "api_key": "leak-me-12345"})
+    r = client.put("/api/settings/ai", headers=ACTION, json={"provider": "cloudru", "model": "m", "api_key": "leak-me-12345"})
     assert r.status_code == 200 and "leak-me" not in r.text
     assert client.put("/api/ai/key", headers=ACTION, json={"key": "sk-abcdef123456"}).json()["has_key"] is True
     text = client.get("/api/settings").text
@@ -178,7 +184,7 @@ def test_settings_roundtrip_and_key_is_never_returned(tmp_path: Path):
 def test_chat_uses_provider_and_reports_errors(monkeypatch, tmp_path: Path):
     client, db, _ = make_client(tmp_path)
     establish_session(client)
-    client.put("/api/settings/ai", headers=ACTION, json={"provider": "openai", "base_url": "http://127.0.0.1:1/v1"})
+    connect_ai(client)
     monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: {"choices": [{"message": {"content": "**Да**, господин"}}]})
     r = client.post("/api/chat", headers=ACTION, json={"text": "ты здесь?"}).json()
     assert [m["role"] for m in r["messages"]] == ["user", "assistant"] and "Да" in r["messages"][1]["content"]
@@ -196,7 +202,7 @@ def test_ai_test_endpoint_and_chat_clear(monkeypatch, tmp_path: Path):
     client, db, _ = make_client(tmp_path)
     establish_session(client)
     assert client.post("/api/ai/test", headers=ACTION).json()["ok"] is False
-    client.put("/api/settings/ai", headers=ACTION, json={"provider": "openai", "base_url": "http://127.0.0.1:1/v1"})
+    connect_ai(client)
     monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: {"choices": [{"message": {"content": "да"}}]})
     assert client.post("/api/ai/test", headers=ACTION).json() == {"ok": True, "detail": "да"}
     client.post("/api/chat", headers=ACTION, json={"text": "hi"})
@@ -278,7 +284,7 @@ def test_memory_endpoints_and_chat_uses_memory(monkeypatch, tmp_path: Path):
         return {"choices": [{"message": {"content": "Мурка"}}]}
 
     monkeypatch.setattr("core.ai._http_post_json", fake)
-    client.put("/api/settings/ai", headers=ACTION, json={"provider": "openai", "base_url": "http://127.0.0.1:1/v1", "use_character": False})
+    connect_ai(client, use_character=False)
     client.post("/api/chat", headers=ACTION, json={"text": "Как зовут мою кошку?"})
     assert "Мурка" in sent["system"]
     assert client.get("/api/memory").json()["stats"]["learned"] == 2  # chat turn was learned
@@ -311,7 +317,7 @@ def test_calendar_and_chat_export(tmp_path: Path):
 def test_stop_discards_the_answer_and_validates_request_id(monkeypatch, tmp_path: Path):
     client, db, _ = make_client(tmp_path)
     establish_session(client)
-    client.put("/api/settings/ai", headers=ACTION, json={"provider": "openai", "base_url": "http://127.0.0.1:1/v1"})
+    connect_ai(client)
     monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: {"choices": [{"message": {"content": "поздно"}}]})
     assert client.post("/api/chat/cancel", headers=ACTION, json={"request_id": ""}).status_code == 400
     assert client.post("/api/chat/cancel", json={"request_id": "r1"}).status_code == 403

@@ -94,7 +94,10 @@
     beh.append(ui.toggle("Приветствие при открытии", a.greeting, v => change({greeting: v}), "Короткая реплика по времени суток"));
     nodes.push(beh);
     const acts = el("div", "actions"); acts.append(ui.btn("Вернуть в правый нижний угол", "", () => Koh.resetPos())); nodes.push(acts);
-    nodes.push(el("p", "hint", "Аватар можно перетаскивать по любой странице. Размер и положение окон кабинета и чата меняются за рамку или заголовок."));
-    return nodes;
-  }, 20);
+    const note = el("p", "hint", "Аватар можно перетаскивать по любой странице. Размер и положение окон кабинета и чата меняются за рамку или заголовок."); nodes.push(note);
+    const grid = el("div", "cab-grid");
+    [prev, facesSec, acts, note].forEach(n => n.classList.add("cab-wide"));
+    grid.append(...nodes);
+    return [grid];
+  }, 20, "◉");
 })();

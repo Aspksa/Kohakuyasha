@@ -21,6 +21,7 @@
     el.classList.remove("shape-soft", "shape-rounded", "shape-circle", "anim-float", "anim-pulse", "anim-breathe");
     el.classList.add(`shape-${a.shape}`);
     if (a.animation !== "none" && el === avatar) el.classList.add(`anim-${a.animation}`);
+    el.classList.toggle("crop-full", a.crop === "full");
     el.classList.toggle("ring", !!a.ring); el.classList.toggle("glow", !!a.glow); el.classList.toggle("nodot", !a.status_dot);
     el.style.setProperty("--av-ring", a.ring_color); el.style.setProperty("--av-glow", a.glow_color + "99");
     el.style.setProperty("--av-opacity", String(a.opacity / 100));

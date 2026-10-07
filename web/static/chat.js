@@ -180,8 +180,9 @@
   panel.querySelector('[data-act="new"]').addEventListener("click", newChat);
 
   function renderStatus() {
-    const ai = Koh.settings.ai || {}, on = ai.provider && ai.provider !== "none";
-    statusEl.replaceChildren(el("i", on ? "dot on" : "dot"), document.createTextNode(on ? `онлайн · ${ai.model || (ai.defaults && ai.defaults.models[ai.provider]) || ai.provider}` : "ИИ не подключён"));
+    const ai = Koh.settings.ai || {}, on = ai.provider === "cloudru" && ai.has_key;
+    const model = (ai.model || (ai.defaults && ai.defaults.model) || "").split("/").pop();
+    statusEl.replaceChildren(el("i", on ? "dot on" : "dot"), document.createTextNode(on ? `онлайн · ${model}` : "ИИ не подключён"));
   }
   Koh.onSettings(renderStatus);
   Koh.hooks.chatReset = () => { if (loaded) renderEmpty(); };

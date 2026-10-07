@@ -100,3 +100,15 @@ Observation, Tests and Journal pages were removed from the UI at the owner's req
 **Status:** Active
 
 The interface uses a soft fox-spirit look: serif display headings, gradient-edged rounded cards, a faint seigaiha wave pattern, glowing tail-shaped light blobs and slow sakura petals. All components share radius/shadow/button tokens in `app.css`. Decorations are optional (Settings: pattern, petals, animations) and never carry information. Stopping a reply is cooperative: the provider call cannot be aborted, so the answer is discarded server-side via `/api/chat/cancel`.
+
+## D-018 — Cloud.ru is the only AI provider
+**Date:** 2026-10-07
+**Status:** Active
+
+At the owner's request the Anthropic and OpenAI-compatible providers were removed. The assistant talks only to Cloud.ru Evolution Foundation Models (OpenAI-compatible chat completions) with DeepSeek V4 Flash (default) and V4 Pro offered as model cards plus a custom model id. Legacy stored provider values fall back to Cloud.ru. Without a key the assistant answers with a notice explaining how to connect.
+
+## D-019 — Overview uses fixed component sizes
+**Date:** 2026-10-07
+**Status:** Active
+
+Clock, calendar cells and the side column use fixed pixel sizes and the page content is capped at 1160px, so resizing or maximising the window never rescales them. Responsive changes happen only at explicit breakpoints and container-query widths.

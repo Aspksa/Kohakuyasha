@@ -66,7 +66,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     def all_faces() -> list[dict]:
         default = {
             "id": "default", "name": "Kohakuyasha", "builtin": True, "url": "/static/avatar.png",
-            "small": "/static/avatar-small.png", "full": "/static/avatar-full.jpg", "zoom": 1.0, "x": 0.0, "y": 0.0, "w": 1, "h": 1,
+            "small": "/static/avatar-small.png", "full": "/static/avatar-full.png", "zoom": 1.0, "x": 0.0, "y": 0.0, "w": 1, "h": 1,
         }
         return [default] + [face_public(f) for f in faces_list()]
 
@@ -345,7 +345,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     async def test_ai():
         settings = await asyncio.to_thread(ai_settings)
         if settings.provider == "none":
-            return JSONResponse({"ok": False, "detail": "ИИ-провайдер не выбран."}, status_code=200)
+            return {"ok": False, "detail": "ИИ отключён в настройках."}
         try:
             text = await asyncio.to_thread(
                 ai.complete, settings, secrets.get_key(), "", [{"role": "user", "content": "Ответь одним словом: готова?"}]
@@ -376,7 +376,8 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         settings = await asyncio.to_thread(ai_settings)
         mem = await asyncio.to_thread(memory_settings)
         history = await asyncio.to_thread(db.recent_chat, 60)
-        snippets = await asyncio.to_thread(db.search_memory, text, mem.max_snippets) if mem.enabled and settings.provider != "none" else []
+        ready = settings.provider != "none" and secrets.has_key()
+        snippets = await asyncio.to_thread(db.search_memory, text, mem.max_snippets) if mem.enabled and ready else []
         character_data = await asyncio.to_thread(load_character)
         rid = payload.get("request_id") if isinstance(payload.get("request_id"), str) else ""
         try:
@@ -388,7 +389,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
             # The user pressed "Stop" while the provider was working: the call cannot be aborted mid-flight, so its answer is discarded.
             return {"messages": [user_message], "cancelled": True}
         assistant_message = await asyncio.to_thread(db.add_chat_message, "assistant", answer)
-        if mem.learn_chat and settings.provider != "none":
+        if mem.learn_chat and ready:
             await asyncio.to_thread(db.add_learned, "user", text)
             await asyncio.to_thread(db.add_learned, "assistant", answer)
         return {"messages": [user_message, assistant_message]}
