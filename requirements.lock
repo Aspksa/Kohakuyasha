@@ -12,6 +12,7 @@ idna==3.17
 uvicorn==0.48.0
 click==8.1.8
 h11==0.16.0
+websockets==17.2
 pystray==0.19.5
 six==1.17.0
 Pillow==12.3.0

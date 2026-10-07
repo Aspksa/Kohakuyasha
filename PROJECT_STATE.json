@@ -3,10 +3,10 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.1.4",
+  "current_version": "0.2.0",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "bat_launcher_fix_v0.1.4",
-  "current_branch": "main",
+  "completed_stage": "avatar_chat_cabinet_v0.2.0",
+  "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
     "AGENTS.md",
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "29/29 passed",
+      "linux": "35/35 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,13 +36,14 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for fix/v0.1.3-audit"
+    "note": "Run on PR for v0.2.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
     "Autostart trusts any drive carrying the matching .kohakuyasha-id marker and Kohakuyasha.bat (low risk, needs same UUID).",
     "Instance lock file lives on the (possibly removable) project drive.",
-    "Physical Windows: user confirmed Kohakuyasha.bat v0.1.4 launches and works; tray menu, full diagnostics, restart and autostart/drive-letter checks not individually confirmed."
+    "Physical Windows: user confirmed Kohakuyasha.bat v0.1.4 launches and works; tray menu, full diagnostics, restart and autostart/drive-letter checks not individually confirmed.",
+    "AI provider not connected: chat stores messages and replies with a fixed notice (core/assistant.py is the extension point)."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -77,7 +78,11 @@
     "periodic_event_trimming",
     "same_port_restart",
     "server_start_port_race_retry",
-    "soft_internet_check"
+    "soft_internet_check",
+    "floating_draggable_avatar",
+    "ai_chat_ui_and_history",
+    "ai_personal_cabinet",
+    "websocket_runtime_dependency"
   ],
-  "next_action": "Merge fix/v0.1.3-audit after green Windows+Linux CI, then run Kohakuyasha.bat on a physical Windows machine and execute full diagnostics, tray, restart and autostart checks."
+  "next_action": "Merge v0.2.0 after green Windows+Linux CI, verify avatar drag/left-click chat/right-click cabinet on physical Windows, then connect an AI provider via core/assistant.py with local-only API key storage."
 }

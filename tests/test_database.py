@@ -37,3 +37,18 @@ def test_backup_rotation(tmp_path: Path):
     for _ in range(4):
         db.backup()
     assert len(list(db.backup_dir.glob("kohakuyasha-*.db"))) == 2
+
+
+def test_chat_messages_and_migration_from_v1(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.executescript("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO meta VALUES('schema_version','1');")
+    conn.commit(); conn.close()
+    db = Database(path)
+    db.initialize()
+    assert list((tmp_path / "backups").glob("kohakuyasha-*.db"))  # backup before migration
+    db.add_chat_message("user", "a")
+    db.add_chat_message("assistant", "b")
+    assert [m["content"] for m in db.recent_chat(10)] == ["a", "b"]
+    assert db.chat_count() == 2

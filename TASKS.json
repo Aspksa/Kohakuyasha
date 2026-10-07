@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 6,
+  "next_id": 8,
   "tasks": [
     {
       "id": "task-001",
@@ -59,6 +59,31 @@
         "task-004"
       ],
       "result": "Fixed diagnostics status leak/concurrency, deferred restart/shutdown replies, event trim cost, restart port drift, bind race retry, soft internet check, read-only marker crash; tests 17 -> 27."
+    },
+    {
+      "id": "task-006",
+      "title": "Avatar widget: chat (left click), AI cabinet (right click), draggable across all modules v0.2.0",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-005"
+      ],
+      "result": "Global draggable avatar with persisted position, chat with SQLite history, cabinet from CHARACTER.json; schema v2; websockets dependency fixed."
+    },
+    {
+      "id": "task-007",
+      "title": "Connect AI provider and memory to chat",
+      "priority": 90,
+      "status": "queued",
+      "depends_on": [
+        "task-006"
+      ],
+      "acceptance": [
+        "API key stored locally outside git",
+        "assistant.reply calls provider",
+        "facts extracted into SQLite memory",
+        "memory page in cabinet with edit/delete"
+      ]
     }
   ]
 }

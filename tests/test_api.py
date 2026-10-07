@@ -119,3 +119,39 @@ def test_websocket_without_session_is_rejected(tmp_path: Path):
     with pytest.raises(WebSocketDisconnect):
         with client.websocket_connect("/ws/events", headers={"Host": "127.0.0.1:8710", "Origin": ORIGIN}):
             pass
+
+
+def test_chat_roundtrip_and_validation(tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    assert client.get("/api/chat").json() == {"messages": []}
+    r = client.post("/api/chat", headers=ACTION, json={"text": "  привет  "})
+    assert r.status_code == 200
+    user, answer = r.json()["messages"]
+    assert user["role"] == "user" and user["content"] == "привет"
+    assert answer["role"] == "assistant" and answer["content"]
+    assert [m["role"] for m in client.get("/api/chat").json()["messages"]] == ["user", "assistant"]
+    assert client.post("/api/chat", headers=ACTION, json={"text": "   "}).status_code == 400
+    assert client.post("/api/chat", headers=ACTION, json={"text": 5}).status_code == 400
+    assert client.post("/api/chat", headers=ACTION, json={"text": "x" * 4001}).status_code == 413
+    assert db.chat_count() == 2
+
+
+def test_chat_post_requires_same_origin_marker(tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    assert client.post("/api/chat", json={"text": "hi"}).status_code == 403
+    assert client.post("/api/chat", headers={"Origin": "https://evil.example", "X-Kohakuyasha-Request": "1"}, json={"text": "hi"}).status_code == 403
+    assert db.chat_count() == 0
+
+
+def test_character_endpoint(tmp_path: Path):
+    client, _, _ = make_client(tmp_path)
+    establish_session(client)
+    assert client.get("/api/character").json()["character"] == {}
+    (tmp_path / "CHARACTER.json").write_text('{"name": "Kohakuyasha", "traits": ["calm"]}', encoding="utf-8")
+    data = client.get("/api/character").json()
+    assert data["character"]["name"] == "Kohakuyasha"
+    assert data["stats"] == {"messages": 0}
+    (tmp_path / "CHARACTER.json").write_text("not json", encoding="utf-8")
+    assert client.get("/api/character").json()["character"] == {}
