@@ -213,6 +213,29 @@ class Database:
         with self._lock, self.session() as conn:
             return int(conn.execute("SELECT COUNT(*) FROM chat_messages").fetchone()[0])
 
+    def clear_chat(self) -> int:
+        with self._lock, self.session() as conn:
+            return int(conn.execute("DELETE FROM chat_messages").rowcount)
+
+    def get_setting(self, key: str, default: Any = None) -> Any:
+        with self._lock, self.session() as conn:
+            row = conn.execute("SELECT value_json FROM app_settings WHERE key = ?", (key,)).fetchone()
+        if not row:
+            return default
+        try:
+            return json.loads(row["value_json"])
+        except json.JSONDecodeError:
+            return default
+
+    def set_setting(self, key: str, value: Any) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock, self.session() as conn:
+            conn.execute(
+                "INSERT INTO app_settings(key, value_json, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json, updated_at=excluded.updated_at",
+                (key, json.dumps(value, ensure_ascii=False), now),
+            )
+
     def integrity_check(self) -> tuple[bool, str]:
         with self._lock, self.session() as conn:
             value = conn.execute("PRAGMA integrity_check").fetchone()[0]

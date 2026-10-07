@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import json
+import os
+import threading
+import urllib.error
+import urllib.request
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit
+
+PROVIDERS = ("none", "anthropic", "openai")
+DEFAULT_MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-4o-mini"}
+DEFAULT_BASE_URLS = {"anthropic": "https://api.anthropic.com", "openai": "https://api.openai.com/v1"}
+TIMEOUT_SECONDS = 60
+MAX_PROMPT_CHARS = 8000
+
+
+class AIError(Exception):
+    """Human-readable (Russian) provider failure that is safe to show in the UI."""
+
+
+@dataclass(slots=True)
+class AISettings:
+    provider: str = "none"
+    model: str = ""
+    base_url: str = ""
+    temperature: float | None = None
+    max_tokens: int = 1024
+    system_prompt: str = ""
+    use_character: bool = True
+
+
+@dataclass(slots=True)
+class AvatarSettings:
+    crop: str = "face"        # face | full
+    shape: str = "soft"       # soft | rounded | circle
+    size: int = 96
+    ring: bool = False
+    glow: bool = True
+    status_dot: bool = True
+
+
+def _bool(value: Any, default: bool) -> bool:
+    return value if isinstance(value, bool) else default
+
+
+def _int(value: Any, default: int, low: int, high: int) -> int:
+    if isinstance(value, bool):
+        return default
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return default
+    return min(max(number, low), high)
+
+
+def _choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
+    return value if isinstance(value, str) and value in allowed else default
+
+
+def _text(value: Any, default: str, limit: int) -> str:
+    return value.strip()[:limit] if isinstance(value, str) else default
+
+
+def validate_avatar(raw: dict[str, Any] | None) -> AvatarSettings:
+    raw = raw if isinstance(raw, dict) else {}
+    d = AvatarSettings()
+    return AvatarSettings(
+        crop=_choice(raw.get("crop"), ("face", "full"), d.crop),
+        shape=_choice(raw.get("shape"), ("soft", "rounded", "circle"), d.shape),
+        size=_int(raw.get("size"), d.size, 48, 200),
+        ring=_bool(raw.get("ring"), d.ring),
+        glow=_bool(raw.get("glow"), d.glow),
+        status_dot=_bool(raw.get("status_dot"), d.status_dot),
+    )
+
+
+def validate_base_url(value: Any) -> str:
+    text = _text(value, "", 300).rstrip("/")
+    if not text:
+        return ""
+    parts = urlsplit(text)
+    if parts.scheme not in {"http", "https"} or not parts.hostname:
+        return ""
+    return text
+
+
+def validate_ai(raw: dict[str, Any] | None) -> AISettings:
+    raw = raw if isinstance(raw, dict) else {}
+    d = AISettings()
+    temperature = raw.get("temperature")
+    if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
+        temperature = None
+    else:
+        temperature = round(min(max(float(temperature), 0.0), 1.0), 2)
+    return AISettings(
+        provider=_choice(raw.get("provider"), PROVIDERS, d.provider),
+        model=_text(raw.get("model"), d.model, 120),
+        base_url=validate_base_url(raw.get("base_url")),
+        temperature=temperature,
+        max_tokens=_int(raw.get("max_tokens"), d.max_tokens, 64, 8192),
+        system_prompt=_text(raw.get("system_prompt"), d.system_prompt, MAX_PROMPT_CHARS),
+        use_character=_bool(raw.get("use_character"), d.use_character),
+    )
+
+
+def public_ai(settings: AISettings, secrets: "SecretStore") -> dict[str, Any]:
+    data = asdict(settings)
+    data["has_key"] = secrets.has_key()
+    data["key_hint"] = secrets.hint()
+    data["defaults"] = {"models": DEFAULT_MODELS, "base_urls": DEFAULT_BASE_URLS}
+    return data
+
+
+class SecretStore:
+    """API key lives only in data/secrets.json (git-ignored). It is never returned by the API or logged."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = Path(path)
+        self._lock = threading.Lock()
+
+    def _read(self) -> dict[str, str]:
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def get_key(self) -> str:
+        value = self._read().get("api_key")
+        return value if isinstance(value, str) else ""
+
+    def has_key(self) -> bool:
+        return bool(self.get_key())
+
+    def hint(self) -> str:
+        key = self.get_key()
+        return f"…{key[-4:]}" if len(key) >= 8 else ("…" if key else "")
+
+    def set_key(self, key: str) -> None:
+        key = key.strip()
+        if not key or len(key) > 500 or any(ch.isspace() for ch in key):
+            raise ValueError("Некорректный ключ.")
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"api_key": key}), encoding="utf-8")
+            try:
+                os.chmod(tmp, 0o600)
+            except OSError:
+                pass
+            tmp.replace(self.path)
+
+    def delete_key(self) -> None:
+        with self._lock:
+            self.path.unlink(missing_ok=True)
+
+
+def build_system_prompt(settings: AISettings, character: dict[str, Any]) -> str:
+    parts: list[str] = []
+    if settings.use_character and character:
+        parts.append(
+            "Ты — персонаж личного помощника. Строго соблюдай этот образ и отвечай по-русски, "
+            "если пользователь не просит иначе. Профиль персонажа (JSON): "
+            + json.dumps(character, ensure_ascii=False)
+        )
+    if settings.system_prompt:
+        parts.append(settings.system_prompt)
+    return "\n\n".join(parts)
+
+
+def normalize_history(history: list[dict[str, Any]], limit: int = 30) -> list[dict[str, str]]:
+    """Providers require alternating roles starting with 'user': merge repeats, drop leading assistant turns."""
+    merged: list[dict[str, str]] = []
+    for item in history[-limit:]:
+        role, text = item.get("role"), item.get("content")
+        if role not in ("user", "assistant") or not isinstance(text, str) or not text:
+            continue
+        if merged and merged[-1]["role"] == role:
+            merged[-1]["content"] += "\n\n" + text
+        else:
+            merged.append({"role": role, "content": text})
+    while merged and merged[0]["role"] != "user":
+        merged.pop(0)
+    return merged
+
+
+def _http_post_json(url: str, headers: dict[str, str], body: dict[str, Any]) -> dict[str, Any]:
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode("utf-8"), headers={"Content-Type": "application/json", **headers}, method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def complete(settings: AISettings, api_key: str, system: str, messages: list[dict[str, str]]) -> str:
+    if settings.provider not in ("anthropic", "openai"):
+        raise AIError("ИИ-провайдер не выбран.")
+    if not messages:
+        raise AIError("Нет сообщений для отправки.")
+    needs_key = settings.provider == "anthropic" or "api.openai.com" in (settings.base_url or DEFAULT_BASE_URLS["openai"])
+    if needs_key and not api_key:
+        raise AIError("API-ключ не задан.")
+    model = settings.model or DEFAULT_MODELS[settings.provider]
+    base = settings.base_url or DEFAULT_BASE_URLS[settings.provider]
+    try:
+        if settings.provider == "anthropic":
+            body: dict[str, Any] = {"model": model, "max_tokens": settings.max_tokens, "messages": messages}
+            if system:
+                body["system"] = system
+            if settings.temperature is not None:
+                body["temperature"] = settings.temperature
+            data = _http_post_json(
+                f"{base}/v1/messages", {"x-api-key": api_key, "anthropic-version": "2023-06-01"}, body
+            )
+            text = "".join(
+                block.get("text", "") for block in data.get("content", []) if isinstance(block, dict) and block.get("type") == "text"
+            )
+        else:
+            msgs = ([{"role": "system", "content": system}] if system else []) + messages
+            body = {"model": model, "max_tokens": settings.max_tokens, "messages": msgs}
+            if settings.temperature is not None:
+                body["temperature"] = settings.temperature
+            headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+            data = _http_post_json(f"{base}/chat/completions", headers, body)
+            text = data["choices"][0]["message"]["content"] or ""
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8", "replace")[:300]
+        except Exception:
+            detail = ""
+        if api_key:
+            detail = detail.replace(api_key, "***")
+        raise AIError(f"Провайдер вернул ошибку {exc.code}. {detail}".strip()) from None
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise AIError(f"Нет связи с провайдером: {getattr(exc, 'reason', exc)}") from None
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise AIError("Провайдер вернул неожиданный ответ.") from None
+    text = text.strip()
+    if not text:
+        raise AIError("Провайдер вернул пустой ответ.")
+    return text

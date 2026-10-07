@@ -35,6 +35,7 @@ class Paths:
         self.lock = self.data / "kohakuyasha.lock"
         self.marker = self.root / ".kohakuyasha-id"
         self.character = self.root / "CHARACTER.json"
+        self.secrets = self.data / "secrets.json"
 
     def ensure(self) -> None:
         self.data.mkdir(parents=True, exist_ok=True)

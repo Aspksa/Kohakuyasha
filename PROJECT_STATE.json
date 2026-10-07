@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.2.0",
+  "current_version": "0.3.0",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "avatar_chat_cabinet_v0.2.0",
+  "completed_stage": "chat_cabinet_ai_settings_v0.3.0",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "35/35 passed",
+      "linux": "47/47 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,14 +36,15 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.2.0"
+    "note": "Run on PR for v0.3.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
     "Autostart trusts any drive carrying the matching .kohakuyasha-id marker and Kohakuyasha.bat (low risk, needs same UUID).",
     "Instance lock file lives on the (possibly removable) project drive.",
     "Physical Windows: user confirmed Kohakuyasha.bat v0.1.4 launches and works; tray menu, full diagnostics, restart and autostart/drive-letter checks not individually confirmed.",
-    "AI provider not connected: chat stores messages and replies with a fixed notice (core/assistant.py is the extension point)."
+    "AI provider calls (Anthropic, OpenAI-compatible) are unit-tested with mocks and a local fake server only; not yet verified against a real provider key.",
+    "API key is stored in plain text in data/secrets.json (git-ignored, chmod 600 best effort). Windows DPAPI encryption is a candidate improvement."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -82,7 +83,14 @@
     "floating_draggable_avatar",
     "ai_chat_ui_and_history",
     "ai_personal_cabinet",
-    "websocket_runtime_dependency"
+    "websocket_runtime_dependency",
+    "chatgpt_style_chat",
+    "markdown_lite_renderer",
+    "cabinet_tabs_profile_avatar_ai_system",
+    "avatar_visualization_settings",
+    "ai_provider_settings_and_connection_test",
+    "local_secret_store",
+    "chat_clear"
   ],
-  "next_action": "Merge v0.2.0 after green Windows+Linux CI, verify avatar drag/left-click chat/right-click cabinet on physical Windows, then connect an AI provider via core/assistant.py with local-only API key storage."
+  "next_action": "Merge v0.3.0 after green Windows+Linux CI; verify chat/cabinet on physical Windows with a real provider key; then implement AI memory (task-007 remainder)."
 }

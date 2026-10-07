@@ -155,3 +155,50 @@ def test_character_endpoint(tmp_path: Path):
     assert data["stats"] == {"messages": 0}
     (tmp_path / "CHARACTER.json").write_text("not json", encoding="utf-8")
     assert client.get("/api/character").json()["character"] == {}
+
+
+def test_settings_roundtrip_and_key_is_never_returned(tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    d = client.get("/api/settings").json()
+    assert d["avatar"]["shape"] == "soft" and d["ai"]["provider"] == "none" and d["ai"]["has_key"] is False
+    r = client.put("/api/settings/avatar", headers=ACTION, json={"shape": "circle", "size": 120, "crop": "full"})
+    assert r.json()["shape"] == "circle"
+    assert client.get("/api/settings").json()["avatar"]["size"] == 120
+    r = client.put("/api/settings/ai", headers=ACTION, json={"provider": "anthropic", "model": "m", "api_key": "leak-me-12345"})
+    assert r.status_code == 200 and "leak-me" not in r.text
+    assert client.put("/api/ai/key", headers=ACTION, json={"key": "sk-abcdef123456"}).json()["has_key"] is True
+    text = client.get("/api/settings").text
+    assert "sk-abcdef" not in text and '"has_key":true' in text.replace(" ", "")
+    assert client.put("/api/ai/key", headers=ACTION, json={"key": "bad key"}).status_code == 400
+    assert client.delete("/api/ai/key", headers=ACTION).json()["has_key"] is False
+    assert client.put("/api/settings/avatar", json={"shape": "circle"}).status_code == 403  # needs same-origin marker
+
+
+def test_chat_uses_provider_and_reports_errors(monkeypatch, tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    client.put("/api/settings/ai", headers=ACTION, json={"provider": "openai", "base_url": "http://127.0.0.1:1/v1"})
+    monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: {"choices": [{"message": {"content": "**Да**, господин"}}]})
+    r = client.post("/api/chat", headers=ACTION, json={"text": "ты здесь?"}).json()
+    assert [m["role"] for m in r["messages"]] == ["user", "assistant"] and "Да" in r["messages"][1]["content"]
+
+    def boom(u, h, b):
+        raise OSError("down")
+
+    monkeypatch.setattr("core.ai._http_post_json", boom)
+    r = client.post("/api/chat", headers=ACTION, json={"text": "ещё"}).json()
+    assert [m["role"] for m in r["messages"]] == ["user"] and "Нет связи" in r["error"]
+    assert db.chat_count() == 3
+
+
+def test_ai_test_endpoint_and_chat_clear(monkeypatch, tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    assert client.post("/api/ai/test", headers=ACTION).json()["ok"] is False
+    client.put("/api/settings/ai", headers=ACTION, json={"provider": "openai", "base_url": "http://127.0.0.1:1/v1"})
+    monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: {"choices": [{"message": {"content": "да"}}]})
+    assert client.post("/api/ai/test", headers=ACTION).json() == {"ok": True, "detail": "да"}
+    client.post("/api/chat", headers=ACTION, json={"text": "hi"})
+    assert client.delete("/api/chat", headers=ACTION).json()["removed"] == 2
+    assert client.delete("/api/chat").status_code == 403
