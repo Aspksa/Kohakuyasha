@@ -13,7 +13,12 @@
     DEFAULT_FACE,
     api: async (url, options = {}) => {
       const headers = {"X-Kohakuyasha-Request": "1", ...(options.body ? {"Content-Type": "application/json"} : {})};
-      const r = await fetch(url, {credentials: "same-origin", ...options, headers});
+      let r;
+      try { r = await fetch(url, {credentials: "same-origin", ...options, headers}); }
+      catch (e) {
+        if (e && e.name === "AbortError") throw e;
+        throw new Error("Kohakuyasha не отвечает: программа закрыта или перезапускается. Запустите Kohakuyasha.bat и обновите страницу (F5).");
+      }
       if (r.status === 401) { location.reload(); throw new Error("session expired"); }
       let data = null;
       try { data = await r.json(); } catch {}
