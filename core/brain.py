@@ -271,11 +271,13 @@ def build_context(
         conflicts = format_conflicts(memory_conflicts(chosen))
         if conflicts:
             blocks.append(conflicts)
+    has_memory_context = bool(used)
     if mem.use_summary:
         summary = (db.get_setting("memory_state", {}) or {}).get("summary", "")
         if summary:
             blocks.append("Краткое содержание более ранней части вашего общения:\n" + summary)
-    if len(blocks) > 2:
+            has_memory_context = True
+    if has_memory_context:
         blocks.append(GUIDELINES)
     return blocks, used
 
