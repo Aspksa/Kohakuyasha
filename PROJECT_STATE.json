@@ -6,7 +6,7 @@
   "current_version": "0.1.4",
   "status": "ready_for_physical_windows_validation",
   "completed_stage": "bat_launcher_fix_v0.1.4",
-  "current_branch": "fix/v0.1.3-audit",
+  "current_branch": "main",
   "last_update": "2026-10-07",
   "canonical_files": [
     "AGENTS.md",
@@ -42,7 +42,7 @@
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
     "Autostart trusts any drive carrying the matching .kohakuyasha-id marker and Kohakuyasha.bat (low risk, needs same UUID).",
     "Instance lock file lives on the (possibly removable) project drive.",
-    "v0.1.4 BAT fix unverified on real Windows; awaiting user confirmation."
+    "Physical Windows: user confirmed Kohakuyasha.bat v0.1.4 launches and works; tray menu, full diagnostics, restart and autostart/drive-letter checks not individually confirmed."
   ],
   "implemented": [
     "portable_windows_bootstrap",
