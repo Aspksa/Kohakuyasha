@@ -82,7 +82,9 @@ def reasoning_mode(query: str) -> str:
         score += 1
     if text.count("\n") >= 2 or (chr(96) * 3) in text:
         score += 1
-    if any(marker in text for marker in DEEP_MARKERS):
+    marker_hits = sum(1 for marker in DEEP_MARKERS if marker in text)
+    score += min(marker_hits, 2)
+    if len(text.split()) >= 14:
         score += 1
     if text.count("?") >= 2:
         score += 1
