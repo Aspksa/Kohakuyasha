@@ -40,13 +40,13 @@
   };
 
   // ---------- tab registry ----------
-  Koh.registerTab = (id, label, render, order) => {
-    Koh.tabs = Koh.tabs.filter(t => t.id !== id); Koh.tabs.push({id, label, render, order});
+  Koh.registerTab = (id, label, render, order, icon = "•") => {
+    Koh.tabs = Koh.tabs.filter(t => t.id !== id); Koh.tabs.push({id, label, render, order, icon});
     Koh.tabs.sort((a, b) => a.order - b.order); renderTabs();
   };
   function renderTabs() {
     tabsEl.replaceChildren(...Koh.tabs.map(t => {
-      const b = el("button", "tab" + (t.id === current ? " active" : ""), t.label); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.tab = t.id;
+      const b = el("button", "tab" + (t.id === current ? " active" : "")); b.append(el("i", "", t.icon), document.createTextNode(t.label)); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.tab = t.id;
       b.addEventListener("click", () => selectTab(t.id)); return b;
     }));
   }
@@ -59,36 +59,44 @@
   Koh.hooks.cabinet = () => selectTab(current);
   Koh.hooks.cabinetTab = (id) => selectTab(id);
 
+  // ---------- rail identity + responsive layout ----------
+  const railStatus = document.getElementById("rail-status"), cabPanel = Koh.panels.cabinet;
+  function drawRailStatus() {
+    const ai = Koh.settings.ai || {}, on = ai.provider === "cloudru" && ai.has_key;
+    railStatus.replaceChildren(el("i", on ? "dot on" : "dot"), document.createTextNode(on ? "ИИ подключён" : "ИИ не подключён"));
+  }
+  Koh.onSettings(drawRailStatus); drawRailStatus();
+  if (window.ResizeObserver) new ResizeObserver(() => cabPanel.classList.toggle("cab-narrow", cabPanel.offsetWidth < 640)).observe(cabPanel);
+
   // ---------- Profile ----------
   Koh.registerTab("profile", "Профиль", async () => {
     const [c, s] = await Promise.all([Koh.api("/api/character"), Koh.api("/api/status")]);
-    const ch = c.character || {}, rt = s.runtime || {}, nodes = [];
-    const hero = el("div", "cab-hero"), t = el("div");
+    const ch = c.character || {}, rt = s.runtime || {}, grid = el("div", "cab-grid");
+    const hero = ui.section("О ЧЁМ ОНА"), heroRow = el("div", "cab-hero"), t = el("div");
     t.append(el("h3", "", ch.name || "Kohakuyasha"), el("p", "", `${ch.role === "personal assistant" ? "личный помощник" : (ch.role || "помощник")} · мифическая лиса`));
-    hero.append(Koh.faceImg("", "big"), t); nodes.push(hero);
-    const traits = ui.section("ХАРАКТЕР"), chips = el("div", "chips");
+    heroRow.append(Koh.faceImg("", "big"), t); hero.append(heroRow);
+    const chips = el("div", "chips"); chips.style.marginTop = "12px";
     (Array.isArray(ch.traits) ? ch.traits : []).forEach(x => chips.append(el("span", "chip", TRAITS[x] || String(x))));
-    traits.append(chips); nodes.push(traits);
+    hero.append(chips);
     const looks = ui.section("ОБЛИК"), ap = ch.appearance || {};
     if (ch.apparent_age) looks.append(ui.row("Возраст на вид", ch.apparent_age));
     if (Array.isArray(ap.hair)) looks.append(ui.row("Волосы", ap.hair.map(h => COLORS[h] || h).join(", ")));
     if (ap.fox_ears) looks.append(ui.row("Лисьи уши", "да"));
     if (ap.multiple_fox_tails) looks.append(ui.row("Хвосты", "несколько"));
     if (ch.power) looks.append(ui.row("Сила", ch.power.type === "magic" ? "магия, способная разрушить мир" : String(ch.power.type)));
-    nodes.push(looks);
     const st = ui.section("СОСТОЯНИЕ");
     st.append(ui.row("Статус", rt.status || "—"), ui.row("Сообщений в чате", (c.stats || {}).messages ?? 0), ui.row("Версия", rt.version ? "v" + rt.version : "—"));
-    nodes.push(st);
-    return nodes;
-  }, 10);
+    grid.append(hero, looks, st);
+    return [grid];
+  }, 10, "✿");
 
   // ---------- System ----------
   Koh.registerTab("system", "Система", async () => {
-    const s = await Koh.api("/api/status"), rt = s.runtime || {}, nodes = [], sec = ui.section("РАБОТА");
+    const s = await Koh.api("/api/status"), rt = s.runtime || {}, grid = el("div", "cab-grid"), sec = ui.section("РАБОТА");
     sec.append(ui.row("Статус", rt.status || "—"), ui.row("Действие", rt.current_action || "—"), ui.row("Версия", rt.version ? "v" + rt.version : "—"), ui.row("Порт", rt.port ?? "—"),
       ui.row("CPU", `${Math.round(rt.cpu_percent || 0)}%`), ui.row("Память процесса", `${rt.memory_mb ?? 0} MB`), ui.row("Python", rt.python || "—"));
-    nodes.push(sec);
-    const svc = ui.section("СЛУЖБЫ"); Object.entries(s.services || {}).forEach(([k, v]) => svc.append(ui.row(k, v))); nodes.push(svc);
-    return nodes;
-  }, 90);
+    const svc = ui.section("СЛУЖБЫ"); Object.entries(s.services || {}).forEach(([k, v]) => svc.append(ui.row(k, v)));
+    grid.append(sec, svc);
+    return [grid];
+  }, 90, "⚙");
 })();

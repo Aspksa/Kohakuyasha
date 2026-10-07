@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 12,
+  "next_id": 13,
   "tasks": [
     {
       "id": "task-001",
@@ -129,6 +129,16 @@
         "task-009"
       ],
       "result": "See CHANGELOG change-0011."
+    },
+    {
+      "id": "task-012",
+      "title": "v0.6.0: Cloud.ru-only provider with DeepSeek V4 Flash/Pro, compact stable overview, cabinet v2, transparent full avatar",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-011"
+      ],
+      "result": "See CHANGELOG change-0012."
     }
   ]
 }

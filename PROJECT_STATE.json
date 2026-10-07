@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.5.0",
+  "current_version": "0.6.0",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "design_kitsune_v0.5.0",
+  "completed_stage": "cloudru_only_compact_ui_cabinet_v2_v0.6.0",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "67/67 passed",
+      "linux": "66/66 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.5.0"
+    "note": "Run on PR for v0.6.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -44,9 +44,9 @@
     "Instance lock file lives on the (possibly removable) project drive.",
     "Physical Windows: user confirmed Kohakuyasha.bat v0.1.4 launches and works; tray menu, full diagnostics, restart and autostart/drive-letter checks not individually confirmed.",
     "API key is stored in plain text in data/secrets.json (git-ignored, chmod 600 best effort). Windows DPAPI encryption is a candidate improvement.",
-    "Cloud.ru provider uses the OpenAI-compatible endpoint https://foundation-models.api.cloud.ru/v1 and example model ids from memory; they could not be verified offline. Both are editable in the cabinet.",
     "Memory is retrieval-based (SQLite FTS5 with crude Russian prefix stemming), not model fine-tuning; semantic embeddings are a possible later upgrade.",
-    "Real provider calls (Anthropic, OpenAI, Cloud.ru) are verified only with mocks and a local fake server."
+    "Cloud.ru endpoint https://foundation-models.api.cloud.ru/v1 and model ids deepseek-ai/DeepSeek-V4-Flash / deepseek-ai/DeepSeek-V4-Pro follow Cloud.ru catalog naming but could not be verified offline; both are editable in the cabinet.",
+    "Cloud.ru calls are verified with mocks and a local fake server only, not with a real key."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -110,7 +110,13 @@
     "chat_day_separators",
     "chat_stop_generating",
     "cabinet_card_sections_and_sticky_actions",
-    "overview_upcoming_notes"
+    "overview_upcoming_notes",
+    "cloudru_only_provider",
+    "deepseek_v4_flash_pro_models",
+    "compact_overview_dashboard",
+    "stable_responsive_layout",
+    "cabinet_sidebar_layout",
+    "transparent_full_avatar"
   ],
-  "next_action": "Merge v0.5.0 after green Windows+Linux CI; verify the look on physical Windows (all three themes), then continue with semantic memory (task-010) or the next requested change."
+  "next_action": "Merge v0.6.0 after green Windows+Linux CI; verify on physical Windows with a real Cloud.ru key (model ids, endpoint); then semantic memory (task-010) or the next requested change."
 }

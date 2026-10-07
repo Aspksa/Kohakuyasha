@@ -86,6 +86,9 @@
       try { const r = await Koh.api("/api/memory/learned", {method: "DELETE"}); Koh.toast(`Забыто записей: ${r.removed}`); await refresh(); } catch { Koh.toast("Не удалось очистить"); }
     }));
     tools.append(ui.field("", q), results, clear); nodes.push(tools);
-    return nodes;
-  }, 40);
+    const grid = el("div", "cab-grid");
+    [nodes[0], nodes[1], imp].forEach(n => n.classList.add("cab-wide"));
+    grid.append(...nodes);
+    return [grid];
+  }, 40, "❖");
 })();

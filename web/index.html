@@ -24,39 +24,37 @@
     <main>
       <section class="page active" id="page-overview">
         <div class="page-head"><div><p class="eyebrow">ОБЗОР</p><h1 id="greeting">Добро пожаловать, господин.</h1></div><div class="header-actions"><button class="icon-btn" id="refresh" title="Обновить" aria-label="Обновить">↻</button></div></div>
-        <div class="hero">
-          <div class="sigil-wrap"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="ring ring-three"></div><img src="/static/logo.svg" data-logo class="hero-logo" alt="Kohakuyasha"></div>
-          <div class="hero-copy"><span class="state-badge"><i></i><span id="hero-status">Подключение</span></span><h2>Kohakuyasha <em id="version">—</em></h2><p id="current-action">Ожидание ядра</p><div class="meter"><span></span></div></div>
-        </div>
-        <div class="widgets">
+        <div class="dash">
+          <section class="panel status-card" aria-label="Состояние">
+            <img class="st-face" src="/static/logo.svg" data-logo alt="">
+            <div class="st-main"><div class="st-title"><b>Kohakuyasha</b><em id="version">—</em><span class="state-badge"><i class="led ok"></i><span id="hero-status">Подключение</span></span></div><p id="current-action">Ожидание ядра</p></div>
+            <div class="st-stats">
+              <div><span>CPU</span><b id="cpu">—</b></div><div><span>ПАМЯТЬ</span><b id="memory">—</b></div><div><span>РАБОТАЕТ</span><b id="uptime">—</b></div><div><span>ПОРТ</span><b id="port">—</b></div>
+            </div>
+            <div class="st-svc">
+              <span class="svc"><i class="led" id="led-core"></i>Ядро <b id="svc-core">—</b></span>
+              <span class="svc"><i class="led" id="led-db"></i>SQLite <b id="svc-db">—</b></span>
+              <span class="svc"><i class="led" id="led-web"></i>Web UI <b id="svc-web">—</b></span>
+              <span class="svc"><i class="led" id="led-watchdog"></i>Watchdog <b id="svc-watchdog">—</b></span>
+              <span class="ok-chip" id="overall-state">ПРОВЕРКА</span>
+            </div>
+          </section>
           <section class="panel clock-card" id="clock-card" aria-label="Время">
             <div class="clock-greet" id="clock-greet"></div>
             <div class="clock-time" id="clock-time">--:--</div>
             <div class="clock-date" id="clock-date"></div>
             <div class="clock-meta"><span class="pill" id="clock-tz"></span><span class="pill" id="clock-week"></span><span class="pill" id="clock-doy"></span></div>
-            <div class="upcoming"><div class="up-title">Ближайшее</div><div id="upcoming-list"></div></div>
             <div><div class="daybar"><span id="daybar"></span></div><div class="daybar-label"><span>Прогресс дня</span><b id="daybar-pct">0%</b></div></div>
+            <div class="upcoming"><div class="up-title">БЛИЖАЙШЕЕ</div><div id="upcoming-list"></div></div>
           </section>
-          <section class="panel" id="calendar-card" aria-label="Календарь">
+          <section class="panel calendar-card" id="calendar-card" aria-label="Календарь">
             <div class="cal-head"><div class="cal-title" id="cal-title"></div><div class="cal-nav"><button id="cal-prev" aria-label="Предыдущий месяц">‹</button><button id="cal-today">Сегодня</button><button id="cal-next" aria-label="Следующий месяц">›</button></div></div>
-            <div class="cal-grid" id="cal-grid"></div>
-            <div class="notes"><h4 id="notes-title"></h4><div id="notes-list"></div><form class="note-form" id="note-form" autocomplete="off"><input id="note-input" maxlength="300" placeholder="Добавить заметку на этот день…" aria-label="Заметка"><button class="primary" type="submit">+</button></form></div>
+            <div class="cal-wrap">
+              <div class="cal-grid" id="cal-grid"></div>
+              <div class="notes"><h4 id="notes-title"></h4><div id="notes-list"></div><form class="note-form" id="note-form" autocomplete="off"><input id="note-input" maxlength="300" placeholder="Заметка на этот день…" aria-label="Заметка"><button class="primary" type="submit" aria-label="Добавить">+</button></form></div>
+            </div>
           </section>
         </div>
-        <div class="stats">
-          <article><span>CPU</span><strong id="cpu">—</strong><small>нагрузка системы</small></article>
-          <article><span>Память</span><strong id="memory">—</strong><small>процесс Kohakuyasha</small></article>
-          <article><span>Uptime</span><strong id="uptime">—</strong><small>текущая сессия</small></article>
-          <article><span>Порт</span><strong id="port">—</strong><small>только localhost</small></article>
-        </div>
-        <section class="panel"><div class="panel-head"><div><span class="eyebrow">СОСТОЯНИЕ</span><h3>Системы</h3></div><span class="ok-chip" id="overall-state">ПРОВЕРКА</span></div>
-          <div class="service-list">
-            <div><span><i class="led" id="led-core"></i>Ядро</span><b id="svc-core">—</b></div>
-            <div><span><i class="led" id="led-db"></i>SQLite</span><b id="svc-db">—</b></div>
-            <div><span><i class="led" id="led-web"></i>Web UI</span><b id="svc-web">—</b></div>
-            <div><span><i class="led" id="led-watchdog"></i>Watchdog</span><b id="svc-watchdog">—</b></div>
-          </div>
-        </section>
       </section>
 
       <section class="page" id="page-settings">
@@ -95,16 +93,20 @@
 
   <section id="cabinet-panel" class="float-panel cabinet" hidden aria-label="Личный кабинет ИИ">
     <header class="fp-head">
-      <img class="fp-ava" data-face="small" src="/static/avatar-small.png" alt="">
-      <div class="fp-title"><b>Kohakuyasha</b><span>личный кабинет</span></div>
+      <div class="fp-title"><b>Личный кабинет</b><span>Kohakuyasha · настройки ассистента</span></div>
       <div class="fp-actions">
         <button class="fp-btn" data-act="reset" title="Сбросить размер и положение" aria-label="Сбросить размер и положение">⌖</button>
         <button class="fp-btn" data-act="max" title="Развернуть" aria-label="Развернуть">⤢</button>
         <button class="fp-btn" data-close title="Закрыть" aria-label="Закрыть">×</button>
       </div>
     </header>
-    <nav class="tabs" id="cabinet-tabs" role="tablist"></nav>
-    <div id="cabinet-body" class="cabinet-body"></div>
+    <div class="cab-layout">
+      <aside class="cab-rail">
+        <div class="rail-id"><img data-face="big" src="/static/avatar.png" alt=""><b>Kohakuyasha</b><span id="rail-status"><i class="dot"></i>…</span></div>
+        <nav id="cabinet-tabs" class="rail-nav" role="tablist"></nav>
+      </aside>
+      <div id="cabinet-body" class="cabinet-body"></div>
+    </div>
   </section>
 
   <script src="/static/core.js"></script>

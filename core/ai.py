@@ -12,17 +12,15 @@ from urllib.parse import urlsplit
 
 from .prefs import _bool, _choice, _int
 
-PROVIDERS = ("none", "anthropic", "openai", "cloudru")
-DEFAULT_MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-4o-mini", "cloudru": "openai/gpt-oss-120b"}
-DEFAULT_BASE_URLS = {
-    "anthropic": "https://api.anthropic.com",
-    "openai": "https://api.openai.com/v1",
-    "cloudru": "https://foundation-models.api.cloud.ru/v1",  # Cloud.ru Evolution Foundation Models (OpenAI-compatible)
-}
+PROVIDERS = ("none", "cloudru")
+# Cloud.ru Evolution Foundation Models: OpenAI-compatible chat completions. Model ids follow the catalog naming (vendor/Model).
+DEFAULT_MODELS = {"cloudru": "deepseek-ai/DeepSeek-V4-Flash"}
+DEFAULT_BASE_URLS = {"cloudru": "https://foundation-models.api.cloud.ru/v1"}
 MODEL_SUGGESTIONS = {
-    "anthropic": ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-4-5-20251001"],
-    "openai": ["gpt-4o-mini", "gpt-4o"],
-    "cloudru": ["openai/gpt-oss-120b", "Qwen/Qwen3-235B-A22B-Instruct-2507", "GigaChat/GigaChat-2-Max"],
+    "cloudru": [
+        {"id": "deepseek-ai/DeepSeek-V4-Flash", "name": "DeepSeek V4 Flash", "hint": "быстрая и дешёвая"},
+        {"id": "deepseek-ai/DeepSeek-V4-Pro", "name": "DeepSeek V4 Pro", "hint": "максимальное качество"},
+    ]
 }
 TIMEOUT_SECONDS = 60
 MAX_PROMPT_CHARS = 8000
@@ -34,7 +32,7 @@ class AIError(Exception):
 
 @dataclass(slots=True)
 class AISettings:
-    provider: str = "none"
+    provider: str = "cloudru"
     model: str = ""
     base_url: str = ""
     temperature: float | None = None
@@ -80,7 +78,7 @@ def public_ai(settings: AISettings, secrets: "SecretStore") -> dict[str, Any]:
     data = asdict(settings)
     data["has_key"] = secrets.has_key()
     data["key_hint"] = secrets.hint()
-    data["defaults"] = {"models": DEFAULT_MODELS, "base_urls": DEFAULT_BASE_URLS, "suggestions": MODEL_SUGGESTIONS}
+    data["defaults"] = {"model": DEFAULT_MODELS["cloudru"], "base_url": DEFAULT_BASE_URLS["cloudru"], "suggestions": MODEL_SUGGESTIONS["cloudru"]}
     return data
 
 
@@ -186,49 +184,33 @@ def _http_post_json(url: str, headers: dict[str, str], body: dict[str, Any]) -> 
 
 
 def complete(settings: AISettings, api_key: str, system: str, messages: list[dict[str, str]]) -> str:
-    if settings.provider not in ("anthropic", "openai", "cloudru"):
-        raise AIError("ИИ-провайдер не выбран.")
+    if settings.provider != "cloudru":
+        raise AIError("ИИ отключён в настройках.")
     if not messages:
         raise AIError("Нет сообщений для отправки.")
-    needs_key = settings.provider in ("anthropic", "cloudru") or "api.openai.com" in (settings.base_url or DEFAULT_BASE_URLS["openai"])
-    if needs_key and not api_key:
+    if not api_key:
         raise AIError("API-ключ не задан.")
-    model = settings.model or DEFAULT_MODELS[settings.provider]
-    base = settings.base_url or DEFAULT_BASE_URLS[settings.provider]
+    model = settings.model or DEFAULT_MODELS["cloudru"]
+    base = settings.base_url or DEFAULT_BASE_URLS["cloudru"]
+    msgs = ([{"role": "system", "content": system}] if system else []) + messages
+    body: dict[str, Any] = {"model": model, "max_tokens": settings.max_tokens, "messages": msgs}
+    if settings.temperature is not None:
+        body["temperature"] = settings.temperature
     try:
-        if settings.provider == "anthropic":
-            body: dict[str, Any] = {"model": model, "max_tokens": settings.max_tokens, "messages": messages}
-            if system:
-                body["system"] = system
-            if settings.temperature is not None:
-                body["temperature"] = settings.temperature
-            data = _http_post_json(
-                f"{base}/v1/messages", {"x-api-key": api_key, "anthropic-version": "2023-06-01"}, body
-            )
-            text = "".join(
-                block.get("text", "") for block in data.get("content", []) if isinstance(block, dict) and block.get("type") == "text"
-            )
-        else:
-            msgs = ([{"role": "system", "content": system}] if system else []) + messages
-            body = {"model": model, "max_tokens": settings.max_tokens, "messages": msgs}
-            if settings.temperature is not None:
-                body["temperature"] = settings.temperature
-            headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-            data = _http_post_json(f"{base}/chat/completions", headers, body)
-            text = data["choices"][0]["message"]["content"] or ""
+        data = _http_post_json(f"{base}/chat/completions", {"Authorization": f"Bearer {api_key}"}, body)
+        text = data["choices"][0]["message"]["content"] or ""
     except urllib.error.HTTPError as exc:
         try:
             detail = exc.read().decode("utf-8", "replace")[:300]
         except Exception:
             detail = ""
-        if api_key:
-            detail = detail.replace(api_key, "***")
-        raise AIError(f"Провайдер вернул ошибку {exc.code}. {detail}".strip()) from None
+        detail = detail.replace(api_key, "***")
+        raise AIError(f"Cloud.ru вернул ошибку {exc.code}. {detail}".strip()) from None
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise AIError(f"Нет связи с провайдером: {getattr(exc, 'reason', exc)}") from None
+        raise AIError(f"Нет связи с Cloud.ru: {getattr(exc, 'reason', exc)}") from None
     except (ValueError, KeyError, IndexError, TypeError):
-        raise AIError("Провайдер вернул неожиданный ответ.") from None
+        raise AIError("Cloud.ru вернул неожиданный ответ.") from None
     text = text.strip()
     if not text:
-        raise AIError("Провайдер вернул пустой ответ.")
+        raise AIError("Cloud.ru вернул пустой ответ.")
     return text
