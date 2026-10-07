@@ -155,3 +155,9 @@ Files live as ordinary files under `data/disk/files` (so they are visible and po
 
 Kohakuyasha classifies each user turn locally as fast or deep. Fast turns remain single-pass. Deep analytical, coding and multi-constraint turns get stronger reasoning instructions plus one additional review pass for missed requirements, contradictions and factual defects. Review failure falls back to the first valid answer. Memory retrieval expands likely follow-ups with recent user turns and ranks facts relevance-first while preserving pinned memory.
 
+## D-027 — Working memory is explicit and memory conflicts are surfaced
+**Date:** 2026-10-07
+**Status:** Active
+
+Each turn gets a compact working-memory block containing the current user goal and recent explicit constraints. This is assembled locally and does not require another model request. Selected long-term facts are also checked for likely contradictions; conflicting facts are marked in context so the assistant does not silently merge incompatible memories and instead prefers the user's newer statement or asks only when ambiguity materially blocks the task.
+
