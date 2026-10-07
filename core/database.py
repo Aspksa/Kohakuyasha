@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class Database:
@@ -103,6 +103,12 @@ class Database:
                     value_json TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+                    content TEXT NOT NULL
+                );
                 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
@@ -184,6 +190,28 @@ class Database:
                 item["payload"] = None
             result.append(item)
         return result
+
+    def add_chat_message(self, role: str, content: str) -> dict[str, Any]:
+        created_at = datetime.now(timezone.utc).isoformat()
+        with self._lock, self.session() as conn:
+            cur = conn.execute(
+                "INSERT INTO chat_messages(created_at, role, content) VALUES (?, ?, ?)",
+                (created_at, role, content),
+            )
+            return {"id": int(cur.lastrowid), "created_at": created_at, "role": role, "content": content}
+
+    def recent_chat(self, limit: int = 100) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 500))
+        with self._lock, self.session() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at, role, content FROM chat_messages ORDER BY id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in reversed(rows)]
+
+    def chat_count(self) -> int:
+        with self._lock, self.session() as conn:
+            return int(conn.execute("SELECT COUNT(*) FROM chat_messages").fetchone()[0])
 
     def integrity_check(self) -> tuple[bool, str]:
         with self._lock, self.session() as conn:

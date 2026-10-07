@@ -5,11 +5,11 @@ import json
 import threading
 from typing import Any
 
-from fastapi import FastAPI, Header, Request, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, Header, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import autostart
+from . import assistant, autostart
 from .config import ConfigStore, Paths
 from .database import Database
 from .diagnostics import Diagnostics
@@ -30,7 +30,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         response.headers["Cache-Control"] = "no-store"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; "
-            "connect-src 'self' ws://127.0.0.1:* ws://localhost:* ws://[::1]:*; "
+            "connect-src 'self' ws://127.0.0.1:* ws://localhost:*; "
             "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         )
         return response
@@ -92,6 +92,37 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
                 "watchdog": "ACTIVE" if snap["watchdog_active"] else "OFF",
             },
         }
+
+    @app.get("/api/character")
+    async def character():
+        def load() -> dict:
+            try:
+                data = json.loads(paths.character.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    data = {}
+            except (OSError, ValueError):
+                data = {}
+            return data
+
+        profile, messages = await asyncio.gather(asyncio.to_thread(load), asyncio.to_thread(db.chat_count))
+        return {"character": profile, "stats": {"messages": messages}}
+
+    @app.get("/api/chat")
+    async def chat_history(limit: int = 100):
+        return {"messages": await asyncio.to_thread(db.recent_chat, limit)}
+
+    @app.post("/api/chat")
+    async def chat_send(payload: dict[str, Any] = Body(...)):
+        text = payload.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return JSONResponse({"detail": "Пустое сообщение."}, status_code=400)
+        text = text.strip()
+        if len(text) > 4000:
+            return JSONResponse({"detail": "Сообщение длиннее 4000 символов."}, status_code=413)
+        user_message = await asyncio.to_thread(db.add_chat_message, "user", text)
+        answer = await asyncio.to_thread(assistant.reply, text)
+        assistant_message = await asyncio.to_thread(db.add_chat_message, "assistant", answer)
+        return {"messages": [user_message, assistant_message]}
 
     @app.get("/api/events")
     async def recent_events(limit: int = 80):
