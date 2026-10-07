@@ -1,0 +1,8 @@
+{
+  "language": "ru",
+  "host": "127.0.0.1",
+  "port": 8710,
+  "open_browser": true,
+  "minimize_to_tray": true,
+  "autostart": false
+}

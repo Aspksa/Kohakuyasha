@@ -1,16 +1,58 @@
 # Kohakuyasha
 
-Kohakuyasha is the canonical repository for this project.
+Kohakuyasha — переносимая локальная система-помощница для Windows с русским веб-интерфейсом, SQLite, системным треем, watchdog, автозапуском и встроенной диагностикой.
+
+## Быстрый запуск
+
+1. Скопируйте папку проекта на любой диск, внешний SSD или флешку.
+2. Дважды щёлкните `Kohakuyasha.bat`.
+3. Если Python 3.11+ отсутствует, bootstrap автоматически скачает переносимую сборку Python с python.org в `.runtime/`.
+4. Зависимости устанавливаются автоматически.
+5. После запуска откроется локальная панель Kohakuyasha, а приложение останется в области уведомлений Windows.
+
+По умолчанию веб-интерфейс доступен только на `127.0.0.1`. В локальную сеть он не публикуется.
+
+## Возможности v0.1.0
+
+- переносимый запуск с любого носителя;
+- автоматическая подготовка Python и зависимостей;
+- `Kohakuyasha.bat` как единая точка запуска;
+- защита от запуска нескольких экземпляров;
+- автоматический подбор свободного localhost-порта;
+- SQLite с WAL, проверкой целостности и резервным копированием;
+- system tray с открытием панели, быстрым тестом, автозапуском, перезапуском и выходом;
+- watchdog веб-ядра;
+- русский тёмный бело-золотой интерфейс;
+- live-телеметрия CPU/RAM/uptime/PID;
+- журнал событий и WebSocket-поток;
+- быстрые и полные диагностические тесты;
+- переносимый автозапуск Windows, устойчивый к смене буквы диска;
+- ротация логов;
+- backup БД перед миграциями и восстановление из последней копии при повреждении;
+- безопасный режим через `Kohakuyasha-SafeMode.bat`;
+- экспорт диагностического отчёта JSON;
+- локальная защита управляющих POST-запросов.
+
+## Структура
+
+- `core/` — ядро, БД, API, диагностика, события, автозапуск.
+- `web/` — локальная веб-панель.
+- `scripts/` — bootstrap и служебные команды Windows.
+- `tests/` — автоматические тесты.
+- `data/` — рабочая БД и настройки, не коммитятся.
+- `logs/` — рабочие логи, не коммитятся.
+- `.runtime/` — локальный Python/venv и зависимости, не коммитятся.
+
+## Тесты
+
+После подготовки окружения:
+
+```bat
+scripts\run_tests.bat
+```
+
+Bootstrap также выполняет тесты перед запуском. Ошибка теста не блокирует запуск — её можно исследовать через раздел «Тесты».
 
 ## Source of truth
-All durable project state, decisions, tasks, errors, version history, and implementation changes must live in this repository. Chat is only a control surface for commands, short plans, and results.
 
-## Canonical project files
-- `AGENTS.md` — operating rules for AI-assisted development
-- `PROJECT_STATE.json` — current machine-readable project state
-- `TASKS.json` — task queue and dependencies
-- `CHANGELOG.jsonl` — append-only change history
-- `ERRORS.jsonl` — append-only error/fix history
-- `DECISIONS.md` — durable architectural/product decisions
-- `CHARACTER.json` — canonical Kohakuyasha character definition
-- `VERSION` — current project version
+Этот репозиторий — единственный источник истины проекта. Durable state проекта находится в `PROJECT_STATE.json`, `TASKS.json`, `CHANGELOG.jsonl`, `ERRORS.jsonl`, `DECISIONS.md` и `VERSION`.

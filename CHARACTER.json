@@ -13,10 +13,7 @@
     "extremely powerful"
   ],
   "appearance": {
-    "hair": [
-      "white",
-      "golden"
-    ],
+    "hair": ["white", "golden"],
     "fox_ears": true,
     "multiple_fox_tails": true
   },

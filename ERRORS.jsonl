@@ -1,1 +1,1 @@
-
+{"id":"error-0001","date":"2026-10-07","version":"0.1.0","scope":"test_runner","status":"resolved","summary":"Pytest imports depended on the caller working directory.","cause":"Project root was not guaranteed on sys.path when tests were launched by absolute path.","fix":"Added pyproject.toml with pytest pythonpath and testpaths configuration."}

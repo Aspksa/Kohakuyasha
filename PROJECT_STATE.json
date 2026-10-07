@@ -3,8 +3,8 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.0.0",
-  "status": "initialized",
+  "current_version": "0.1.0",
+  "status": "ready_for_windows_validation",
   "active_task_id": null,
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -17,5 +17,29 @@
     "CHARACTER.json",
     "VERSION"
   ],
-  "next_action": "Define the first implementation task."
+  "implemented": [
+    "portable_windows_bootstrap",
+    "automatic_python_download",
+    "isolated_runtime_dependencies",
+    "single_instance_lock",
+    "sqlite_database",
+    "database_backup_and_recovery",
+    "local_fastapi_web_ui",
+    "system_tray",
+    "watchdog",
+    "portable_windows_autostart",
+    "live_event_stream",
+    "system_telemetry",
+    "quick_and_full_diagnostics",
+    "safe_mode",
+    "diagnostics_export",
+    "russian_interface"
+  ],
+  "validation": {
+    "unit_tests": "8_passed",
+    "python_compile": "passed",
+    "http_smoke_test": "passed",
+    "windows_bootstrap_and_tray": "pending_physical_windows_test"
+  },
+  "next_action": "Run Kohakuyasha.bat on Windows and execute full diagnostics from the web UI."
 }

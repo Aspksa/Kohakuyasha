@@ -1,5 +1,29 @@
 {
   "schema_version": 1,
-  "next_id": 1,
-  "tasks": []
+  "next_id": 3,
+  "tasks": [
+    {
+      "id": "task-001",
+      "title": "Build Kohakuyasha v0.1.0 local Windows foundation",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [],
+      "result": "Portable bootstrap, core, SQLite, tray, watchdog, Russian web UI, autostart, diagnostics and tests implemented."
+    },
+    {
+      "id": "task-002",
+      "title": "Validate v0.1.0 on physical Windows",
+      "priority": 100,
+      "status": "queued",
+      "depends_on": ["task-001"],
+      "acceptance": [
+        "Kohakuyasha.bat launches from a removable drive",
+        "Python is downloaded automatically when absent",
+        "tray icon and menu work",
+        "browser opens the local UI",
+        "full diagnostics pass",
+        "autostart survives a removable-drive letter change"
+      ]
+    }
+  ]
 }
