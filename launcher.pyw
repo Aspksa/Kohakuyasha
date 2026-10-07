@@ -9,6 +9,9 @@ import time
 import webbrowser
 from pathlib import Path
 
+# Embedded Python (._pth) runs isolated and does not put the script directory on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import psutil
 import uvicorn
 
