@@ -18,7 +18,6 @@
     const info = state && state.info;
     Koh.updateInfo = info || null;
     if (dot) dot.hidden = !(info && info.newer);
-    if (Koh.onUpdateInfo) Koh.onUpdateInfo();
   }
   async function load() {
     try { state = await Koh.api("/api/update"); } catch { return; }
@@ -29,7 +28,7 @@
   async function check(silent) {
     if (busy) return; busy = true; draw(silent ? null : "Проверяю GitHub…");
     try { state = await Koh.api("/api/update/check", {method: "POST", body: "{}"}); busy = false; publish(); draw(); if (!silent) Koh.toast(state.info && state.info.newer ? `Доступна версия v${state.info.remote}` : "У вас последняя версия"); }
-    catch (e) { busy = false; if (state) state.info = {...(state.info || {}), error: e.message}; draw(silent ? null : e.message, true); Koh.updateInfo = {error: e.message}; if (Koh.onUpdateInfo) Koh.onUpdateInfo(); }
+    catch (e) { busy = false; if (state) state.info = {...(state.info || {}), error: e.message}; draw(silent ? null : e.message, true); Koh.updateInfo = {error: e.message}; }
   }
   async function install() {
     if (busy) return; if (!confirm(`Установить v${state.info.remote}? Данные, настройки и ключи сохранятся, перед заменой будет создана резервная копия.`)) return;
