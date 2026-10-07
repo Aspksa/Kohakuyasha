@@ -72,6 +72,75 @@ REVIEW_SYSTEM = (
 )
 
 
+CONSTRAINT_MARKERS = (
+    "долж", "нужно", "надо", "обяз", "только", "не ", "без ", "нельзя", "миним", "максим",
+    "must", "need", "only", "without", "never", "do not", "don't", "minimum", "maximum",
+)
+NEGATION_MARKERS = ("не ", "нет ", "никогда", "перестал", "перестала", "не любит", "не хочет")
+
+
+def working_memory_block(query: str, history: list[dict[str, Any]] | None = None, limit_chars: int = 1400) -> str:
+    """Keep the current goal and recent explicit constraints visible without another model call."""
+    current = (query or "").strip()
+    if not current:
+        return ""
+    lines = [f"Текущая цель пользователя: {current[:700]}"]
+    seen = {current}
+    constraints: list[str] = []
+    for item in reversed(history or []):
+        if item.get("role") != "user":
+            continue
+        text = str(item.get("content") or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        low = text.lower()
+        if any(marker in low for marker in CONSTRAINT_MARKERS):
+            constraints.append(text[:350])
+        if len(constraints) >= 3:
+            break
+    if constraints:
+        lines.append("Актуальные ограничения из недавних сообщений:")
+        lines.extend(f"- {x}" for x in reversed(constraints))
+    return "\n".join(lines)[:limit_chars]
+
+
+def _strip_negation(text: str) -> str:
+    out = " " + (text or "").lower().strip() + " "
+    for marker in NEGATION_MARKERS:
+        out = out.replace(" " + marker, " ")
+    return " ".join(out.split())
+
+
+def memory_conflicts(facts: list[dict[str, Any]], limit: int = 3) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """Find likely contradictory near-duplicate facts so the model does not silently trust both."""
+    pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for i, a in enumerate(facts):
+        atext = str(a.get("text", ""))
+        aneg = any(m in atext.lower() for m in NEGATION_MARKERS)
+        for b in facts[i + 1:]:
+            if a.get("category") != b.get("category"):
+                continue
+            btext = str(b.get("text", ""))
+            bneg = any(m in btext.lower() for m in NEGATION_MARKERS)
+            if aneg == bneg:
+                continue
+            if similarity(_strip_negation(atext), _strip_negation(btext)) >= 0.6:
+                pairs.append((a, b))
+                if len(pairs) >= limit:
+                    return pairs
+    return pairs
+
+
+def format_conflicts(pairs: list[tuple[dict[str, Any], dict[str, Any]]]) -> str:
+    if not pairs:
+        return ""
+    lines = ["В памяти есть возможные противоречия. Не смешивай их и не угадывай; при необходимости опирайся на более свежую реплику пользователя:"]
+    for a, b in pairs:
+        lines.append(f"- «{a.get('text', '')}» ↔ «{b.get('text', '')}»")
+    return "\n".join(lines)
+
+
 def reasoning_mode(query: str) -> str:
     """Cheap local router: use deep mode only for genuinely complex requests."""
     text = (query or "").strip().lower()
@@ -188,13 +257,20 @@ def build_context(
     now = now or datetime.now()
     expanded_query = contextual_query(query, history)
     blocks = [format_now(now), cognition_block(query)]
+    working = working_memory_block(query, history)
+    if working:
+        blocks.append(working)
     used: list[int] = []
     if mem.use_facts:
-        chosen = select_facts(db.list_facts(MAX_FACTS), expanded_query)
+        all_facts = db.list_facts(MAX_FACTS)
+        chosen = select_facts(all_facts, expanded_query)
         text = format_facts(chosen)
         if text:
             blocks.append(text)
             used = [f["id"] for f in chosen]
+        conflicts = format_conflicts(memory_conflicts(chosen))
+        if conflicts:
+            blocks.append(conflicts)
     if mem.use_summary:
         summary = (db.get_setting("memory_state", {}) or {}).get("summary", "")
         if summary:
