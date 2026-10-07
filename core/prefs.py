@@ -128,6 +128,11 @@ class MemorySettings:
     enabled: bool = True
     learn_chat: bool = True
     max_snippets: int = 6
+    use_facts: bool = True        # inject known facts about the user into every request
+    auto_facts: bool = True       # extract new facts from the conversation automatically
+    extract_every: int = 3        # extract after this many new user messages
+    use_summary: bool = True      # keep a rolling summary of older conversation
+    use_calendar: bool = True     # tell the assistant about today's and upcoming calendar notes
 
 
 def validate_memory(raw: dict[str, Any] | None) -> MemorySettings:
@@ -137,4 +142,9 @@ def validate_memory(raw: dict[str, Any] | None) -> MemorySettings:
         enabled=_bool(raw.get("enabled"), d.enabled),
         learn_chat=_bool(raw.get("learn_chat"), d.learn_chat),
         max_snippets=_int(raw.get("max_snippets"), d.max_snippets, 1, 12),
+        use_facts=_bool(raw.get("use_facts"), d.use_facts),
+        auto_facts=_bool(raw.get("auto_facts"), d.auto_facts),
+        extract_every=_int(raw.get("extract_every"), d.extract_every, 1, 10),
+        use_summary=_bool(raw.get("use_summary"), d.use_summary),
+        use_calendar=_bool(raw.get("use_calendar"), d.use_calendar),
     )

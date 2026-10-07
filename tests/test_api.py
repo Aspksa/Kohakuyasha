@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -327,3 +328,67 @@ def test_stop_discards_the_answer_and_validates_request_id(monkeypatch, tmp_path
     assert db.chat_count() == 1 and db.memory_stats()["learned"] == 0
     r = client.post("/api/chat", headers=ACTION, json={"text": "ещё раз", "request_id": "r1"}).json()  # the id was consumed
     assert [m["role"] for m in r["messages"]] == ["user", "assistant"]
+
+
+def test_facts_api_and_extract_requires_connection(tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    assert client.get("/api/memory/facts").json()["facts"] == []
+    assert client.post("/api/memory/facts", headers=ACTION, json={"text": "ab"}).status_code == 400
+    fid = client.post("/api/memory/facts", headers=ACTION, json={"text": "Любит чай с лимоном", "category": "preference", "importance": 4, "pinned": True}).json()["id"]
+    f = client.get("/api/memory/facts").json()["facts"][0]
+    assert f["text"] == "Любит чай с лимоном" and f["pinned"] is True and f["source"] == "manual"
+    assert client.put(f"/api/memory/facts/{fid}", headers=ACTION, json={"text": "Любит зелёный чай", "importance": 2, "pinned": False}).status_code == 200
+    assert client.put("/api/memory/facts/999", headers=ACTION, json={"text": "x y z"}).status_code == 404
+    assert client.get("/api/memory").json()["stats"]["facts"] == 1
+    assert client.post("/api/memory/extract", headers=ACTION).status_code == 400  # no key yet
+    assert client.post("/api/memory/facts", json={"text": "без маркера"}).status_code == 403
+    assert client.delete(f"/api/memory/facts/{fid}", headers=ACTION).status_code == 200
+    assert client.delete(f"/api/memory/facts/{fid}", headers=ACTION).status_code == 404
+
+
+def test_chat_remember_command_and_context_injection(monkeypatch, tmp_path: Path):
+    from core import brain
+    client, db, _ = make_client(tmp_path)
+    client.app.state.run_background = lambda fn: fn()  # run background memory work inline so the test is deterministic
+    establish_session(client)
+    connect_ai(client, use_character=False)
+    seen = {"systems": []}
+
+    def fake(u, h, b):
+        system = b["messages"][0]["content"] if b["messages"][0]["role"] == "system" else ""
+        if system == brain.EXTRACT_SYSTEM:
+            return {"choices": [{"message": {"content": json.dumps({"facts": [{"text": "Живёт в Казани", "category": "personal", "importance": 5}]})}}]}
+        seen["systems"].append(system)
+        return {"choices": [{"message": {"content": "Хорошо, господин."}}]}
+
+    monkeypatch.setattr("core.ai._http_post_json", fake)
+    r = client.post("/api/chat", headers=ACTION, json={"text": "Запомни: я живу в Казани"}).json()
+    assert r["remembered"] == ["Живёт в Казани"] and [m["role"] for m in r["messages"]] == ["user", "assistant"]
+    assert [f["text"] for f in db.list_facts()] == ["Живёт в Казани"]
+    client.post("/api/chat", headers=ACTION, json={"text": "Где я живу?"})
+    assert "Живёт в Казани" in seen["systems"][-1] and "Сейчас:" in seen["systems"][-1]
+    assert db.list_facts()[0]["use_count"] == 1  # the fact was used and counted
+    client.put("/api/settings/memory", headers=ACTION, json={"use_facts": False})
+    client.post("/api/chat", headers=ACTION, json={"text": "А теперь?"})
+    assert "Живёт в Казани" not in seen["systems"][-1]
+
+
+def test_extract_endpoint_summary_and_clear(monkeypatch, tmp_path: Path):
+    from core import brain
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    connect_ai(client)
+    for t in ("мою собаку зовут Рекс", "ей три года"):
+        db.add_chat_message("user", t); db.add_chat_message("assistant", "ок")
+    monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: {"choices": [{"message": {"content": json.dumps({"facts": [{"text": "Собаку зовут Рекс", "category": "relation", "importance": 4}]})}}]})
+    r = client.post("/api/memory/extract", headers=ACTION).json()
+    assert r["added"] == 1 and r["texts"] == ["Собаку зовут Рекс"]
+    db.set_setting("memory_state", {"summary": "Обсуждали собаку."})
+    assert client.get("/api/memory").json()["summary"] == "Обсуждали собаку."
+    assert client.delete("/api/memory/summary", headers=ACTION).json() == {"cleared": True}
+    assert client.get("/api/memory").json()["summary"] == ""
+    assert client.delete("/api/memory/facts", headers=ACTION).json()["removed"] == 1
+    monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: (_ for _ in ()).throw(OSError("down")))
+    db.add_chat_message("user", "ещё сообщение")
+    assert client.post("/api/memory/extract", headers=ACTION).status_code == 502

@@ -13,7 +13,7 @@ from fastapi import Body, FastAPI, Header, Request, WebSocket, WebSocketDisconne
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, assistant, autostart, media, memory, prefs
+from . import ai, assistant, autostart, brain, media, memory, prefs
 from .config import ConfigStore, Paths
 from .database import Database
 from .diagnostics import Diagnostics
@@ -27,6 +27,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     app.mount("/static", StaticFiles(directory=paths.static), name="static")
     diagnostics_lock = asyncio.Lock()
     cancelled_requests: dict[str, float] = {}
+    app.state.run_background = lambda fn: threading.Thread(target=fn, daemon=True, name="kohakuyasha-memory").start()
     secrets = ai.SecretStore(paths.secrets)
 
     def load_character() -> dict:
@@ -375,13 +376,14 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         user_message = await asyncio.to_thread(db.add_chat_message, "user", text)
         settings = await asyncio.to_thread(ai_settings)
         mem = await asyncio.to_thread(memory_settings)
-        history = await asyncio.to_thread(db.recent_chat, 60)
         ready = settings.provider != "none" and secrets.has_key()
+        history = await asyncio.to_thread(brain.history_window, db, mem)
         snippets = await asyncio.to_thread(db.search_memory, text, mem.max_snippets) if mem.enabled and ready else []
+        blocks, used_facts = (await asyncio.to_thread(brain.build_context, db, mem, text)) if ready else ([], [])
         character_data = await asyncio.to_thread(load_character)
         rid = payload.get("request_id") if isinstance(payload.get("request_id"), str) else ""
         try:
-            answer = await asyncio.to_thread(assistant.reply, settings, secrets.get_key(), character_data, history, snippets)
+            answer = await asyncio.to_thread(assistant.reply, settings, secrets.get_key(), character_data, history, snippets, blocks)
         except ai.AIError as exc:
             cancelled_requests.pop(rid, None)
             return {"messages": [user_message], "error": str(exc)}
@@ -389,10 +391,28 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
             # The user pressed "Stop" while the provider was working: the call cannot be aborted mid-flight, so its answer is discarded.
             return {"messages": [user_message], "cancelled": True}
         assistant_message = await asyncio.to_thread(db.add_chat_message, "assistant", answer)
-        if mem.learn_chat and ready:
+        out: dict[str, Any] = {"messages": [user_message, assistant_message]}
+        if not ready or answer == assistant.NOT_CONNECTED:
+            return out
+        if used_facts:
+            await asyncio.to_thread(db.touch_facts, used_facts)
+        if mem.learn_chat:
             await asyncio.to_thread(db.add_learned, "user", text)
             await asyncio.to_thread(db.add_learned, "assistant", answer)
-        return {"messages": [user_message, assistant_message]}
+
+        def notify(level: str, message: str) -> None:
+            events.emit(message, level=level, event_type="memory")
+
+        key = secrets.get_key()
+        explicit = brain.explicit_remember(text)
+        if explicit:
+            # "Запомни ..." is answered with confirmation of what was stored, so extract right away.
+            result = await asyncio.to_thread(brain.run_maintenance, db, settings, key, mem, force=True, explicit=explicit, notify=notify)
+            if result["texts"]:
+                out["remembered"] = result["texts"]
+        elif mem.auto_facts or mem.use_summary:
+            app.state.run_background(lambda: brain.run_maintenance(db, settings, key, mem, notify=notify))
+        return out
 
     @app.post("/api/chat/cancel")
     async def chat_cancel(payload: dict[str, Any] = Body(...)):
@@ -418,7 +438,9 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     @app.get("/api/memory")
     async def get_memory():
         def build() -> dict:
-            return {"settings": asdict(memory_settings()), "stats": db.memory_stats(), "dialogs": db.list_dialogs()}
+            state = db.get_setting("memory_state", {}) or {}
+            stats = {**db.memory_stats(), "facts": db.fact_count()}
+            return {"settings": asdict(memory_settings()), "stats": stats, "dialogs": db.list_dialogs(), "summary": state.get("summary", "")}
         return await asyncio.to_thread(build)
 
     @app.post("/api/memory/import")
@@ -443,6 +465,60 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         total = await asyncio.to_thread(store_all)
         events.emit("Импортирована память", event_type="memory", payload={"dialogs": len(convs), "messages": total})
         return {"dialogs": len(convs), "messages": total}
+
+    # ---------- facts (what the assistant knows about the user) ----------
+    @app.get("/api/memory/facts")
+    async def get_facts():
+        return {"facts": await asyncio.to_thread(db.list_facts, 500), "categories": list(db.FACT_CATEGORIES)}
+
+    @app.post("/api/memory/facts")
+    async def add_fact(payload: dict[str, Any] = Body(...)):
+        text = payload.get("text")
+        if not isinstance(text, str) or not 3 <= len(text.strip()) <= 300:
+            return JSONResponse({"detail": "Факт должен быть от 3 до 300 символов."}, status_code=400)
+        importance = payload.get("importance")
+        fid = await asyncio.to_thread(
+            db.add_fact, text.strip(), str(payload.get("category") or "other"),
+            importance if isinstance(importance, int) and not isinstance(importance, bool) else 3, "manual", bool(payload.get("pinned")),
+        )
+        return {"id": fid}
+
+    @app.put("/api/memory/facts/{fact_id}")
+    async def edit_fact(fact_id: int, payload: dict[str, Any] = Body(...)):
+        if not await asyncio.to_thread(lambda: db.update_fact(fact_id, **{k: payload.get(k) for k in ("text", "category", "importance", "pinned") if k in payload})):
+            return JSONResponse({"detail": "Факт не найден или нечего менять."}, status_code=404)
+        return {"updated": fact_id}
+
+    @app.delete("/api/memory/facts/{fact_id}")
+    async def remove_fact(fact_id: int):
+        if not await asyncio.to_thread(db.delete_fact, fact_id):
+            return JSONResponse({"detail": "Факт не найден."}, status_code=404)
+        return {"deleted": fact_id}
+
+    @app.delete("/api/memory/facts")
+    async def clear_facts(scope: str = "auto"):
+        return {"removed": await asyncio.to_thread(db.clear_facts, None if scope == "all" else "auto")}
+
+    @app.post("/api/memory/extract")
+    async def extract_now():
+        settings, mem = await asyncio.to_thread(ai_settings), await asyncio.to_thread(memory_settings)
+        if settings.provider == "none" or not secrets.has_key():
+            return JSONResponse({"detail": "Сначала подключите ИИ: нужен API-ключ Cloud.ru."}, status_code=400)
+        result = await asyncio.to_thread(brain.run_maintenance, db, settings, secrets.get_key(), mem, force=True)
+        if result["busy"]:
+            return JSONResponse({"detail": "Память уже обрабатывается, попробуйте через минуту."}, status_code=409)
+        if result["error"]:
+            return JSONResponse({"detail": result["error"]}, status_code=502)
+        return {"added": result["added"], "updated": result["updated"], "texts": result["texts"]}
+
+    @app.delete("/api/memory/summary")
+    async def clear_summary():
+        def run() -> None:
+            state = dict(db.get_setting("memory_state", {}) or {})
+            state.pop("summary", None)
+            db.set_setting("memory_state", state)
+        await asyncio.to_thread(run)
+        return {"cleared": True}
 
     @app.delete("/api/memory/dialogs/{dialog_id}")
     async def delete_dialog(dialog_id: int):

@@ -112,3 +112,9 @@ At the owner's request the Anthropic and OpenAI-compatible providers were remove
 **Status:** Active
 
 Clock, calendar cells and the side column use fixed pixel sizes and the page content is capped at 1160px, so resizing or maximising the window never rescales them. Responsive changes happen only at explicit breakpoints and container-query widths.
+
+## D-020 — Assistant memory is distilled, local and user-editable
+**Date:** 2026-10-07
+**Status:** Active
+
+Beyond retrieval over imported dialogs (D-015) the assistant keeps (a) a facts table distilled from conversations by a short, low-cost provider request every N user messages or immediately for «Запомни …», (b) a rolling summary of older messages, and (c) the current date/time and upcoming calendar notes. Facts are ranked by importance, pinning, word overlap and recency, near-duplicates are merged, and every fact can be edited, pinned or deleted in the cabinet. Extraction runs after the reply in a background thread and never blocks or fails a chat turn; provider errors are logged as events. Nothing leaves the machine except the prompts sent to Cloud.ru.
