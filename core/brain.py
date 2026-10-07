@@ -67,8 +67,19 @@ SEMANTIC_EXPANSIONS = {
 
 def _concept_match(text: str, markers: tuple[str, ...]) -> bool:
     raw = (text or "").lower()
-    raw_tokens = tokens(raw)
-    return any(marker in raw or bool(raw_tokens & tokens(marker)) for marker in markers)
+    words = [w.lower() for w in WORD_RE.findall(raw)]
+    stems4 = {w[:4] for w in words if len(w) >= 4}
+    for marker in markers:
+        m = marker.lower()
+        if m in raw:
+            return True
+        marker_words = [w.lower() for w in WORD_RE.findall(m)]
+        if marker_words and all(
+            (mw in words) or (len(mw) >= 4 and mw[:4] in stems4)
+            for mw in marker_words
+        ):
+            return True
+    return False
 
 
 def semantic_tokens(text: str) -> set[str]:
