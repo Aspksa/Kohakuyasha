@@ -65,12 +65,18 @@ SEMANTIC_EXPANSIONS = {
 }
 
 
+def _concept_match(text: str, markers: tuple[str, ...]) -> bool:
+    raw = (text or "").lower()
+    raw_tokens = tokens(raw)
+    return any(marker in raw or bool(raw_tokens & tokens(marker)) for marker in markers)
+
+
 def semantic_tokens(text: str) -> set[str]:
     """Lexical stems plus coarse meaning tags; deterministic and dependency-free."""
     raw = (text or "").lower()
     out = set(tokens(raw))
     for concept, markers in SEMANTIC_CONCEPTS.items():
-        if any(marker in raw for marker in markers):
+        if _concept_match(raw, markers):
             out.add("#" + concept)
     return out
 
@@ -95,7 +101,7 @@ def semantic_expand_query(query: str, limit_chars: int = 1200) -> str:
     lowered = raw.lower()
     extras: list[str] = []
     for concept, markers in SEMANTIC_CONCEPTS.items():
-        if any(marker in lowered for marker in markers):
+        if _concept_match(lowered, markers):
             extras.extend(SEMANTIC_EXPANSIONS[concept])
     seen = set()
     ordered = []
