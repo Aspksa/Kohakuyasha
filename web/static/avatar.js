@@ -114,7 +114,7 @@
   }
 
   // ---------- drag / click ----------
-  let drag = null, longTimer = 0, suppress = false;
+  let drag = null, longTimer = 0, suppress = false, dragFrame = 0;
   avatar.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     suppress = false; hideBubble();
@@ -127,12 +127,14 @@
     const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
     if (!drag.moved && Math.hypot(dx, dy) < DRAG_PX) return;
     if (!drag.moved) { drag.moved = true; clearTimeout(longTimer); avatar.classList.add("dragging"); }
-    pos.x = drag.ox + dx; pos.y = drag.oy + dy; applyPos();
+    pos.x = drag.ox + dx; pos.y = drag.oy + dy;
+    if (!dragFrame) dragFrame = requestAnimationFrame(() => { dragFrame = 0; applyPos(); });  // at most one layout per frame
   });
   const endDrag = (e) => {
     clearTimeout(longTimer);
     if (!drag || e.pointerId !== drag.id) return;
     const moved = drag.moved; drag = null; avatar.classList.remove("dragging");
+    if (dragFrame) { cancelAnimationFrame(dragFrame); dragFrame = 0; applyPos(); }
     if (moved) { snapToEdge(); savePos(); } else if (e.type === "pointerup") act("left");
   };
   avatar.addEventListener("pointerup", endDrag);

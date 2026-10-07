@@ -77,13 +77,13 @@ def validate_ai(raw: dict[str, Any] | None) -> AISettings:
 def public_ai(settings: AISettings, secrets: "SecretStore") -> dict[str, Any]:
     data = asdict(settings)
     data["has_key"] = secrets.has_key()
-    data["key_hint"] = secrets.hint()
+    data["key_hint"] = secrets.hint("api_key")
     data["defaults"] = {"model": DEFAULT_MODELS["cloudru"], "base_url": DEFAULT_BASE_URLS["cloudru"], "suggestions": MODEL_SUGGESTIONS["cloudru"]}
     return data
 
 
 class SecretStore:
-    """API key lives only in data/secrets.json (git-ignored). It is never returned by the API or logged."""
+    """Secrets live only in data/secrets.json (git-ignored). They are never returned by the API or logged."""
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
@@ -92,38 +92,57 @@ class SecretStore:
     def _read(self) -> dict[str, str]:
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
+            return {k: v for k, v in data.items() if isinstance(v, str)} if isinstance(data, dict) else {}
         except (OSError, ValueError):
             return {}
 
+    def _write(self, data: dict[str, str]) -> None:
+        if not data:
+            self.path.unlink(missing_ok=True)
+            return
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data), encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o600)
+        except OSError:
+            pass
+        tmp.replace(self.path)
+
+    def get(self, name: str) -> str:
+        return self._read().get(name, "")
+
+    def set(self, name: str, value: str) -> None:
+        value = value.strip()
+        if not value or len(value) > 500 or any(ch.isspace() for ch in value):
+            raise ValueError("Некорректное значение.")
+        with self._lock:
+            data = self._read()
+            data[name] = value
+            self._write(data)
+
+    def delete(self, name: str) -> None:
+        with self._lock:
+            data = self._read()
+            data.pop(name, None)
+            self._write(data)
+
+    def hint(self, name: str) -> str:
+        value = self.get(name)
+        return f"…{value[-4:]}" if len(value) >= 8 else ("…" if value else "")
+
+    # API key (Cloud.ru) helpers kept for readability at call sites
     def get_key(self) -> str:
-        value = self._read().get("api_key")
-        return value if isinstance(value, str) else ""
+        return self.get("api_key")
 
     def has_key(self) -> bool:
-        return bool(self.get_key())
-
-    def hint(self) -> str:
-        key = self.get_key()
-        return f"…{key[-4:]}" if len(key) >= 8 else ("…" if key else "")
+        return bool(self.get("api_key"))
 
     def set_key(self, key: str) -> None:
-        key = key.strip()
-        if not key or len(key) > 500 or any(ch.isspace() for ch in key):
-            raise ValueError("Некорректный ключ.")
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"api_key": key}), encoding="utf-8")
-            try:
-                os.chmod(tmp, 0o600)
-            except OSError:
-                pass
-            tmp.replace(self.path)
+        self.set("api_key", key)
 
     def delete_key(self) -> None:
-        with self._lock:
-            self.path.unlink(missing_ok=True)
+        self.delete("api_key")
 
 
 def format_memory(snippets: list[dict[str, Any]], limit_chars: int = 3000) -> str:

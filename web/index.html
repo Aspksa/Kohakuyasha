@@ -17,6 +17,7 @@
       <div class="brand"><img src="/static/logo.svg" data-logo alt=""><div><strong>Kohakuyasha</strong><span>личная система</span></div></div>
       <nav class="menu">
         <button class="nav active" data-page="overview"><span>◈</span> Обзор</button>
+        <button class="nav" data-page="update"><span>⭳</span> Обновление<i class="nav-dot" id="update-dot" hidden></i></button>
         <button class="nav" data-page="settings"><span>⚙</span> Настройки</button>
       </nav>
       <div class="side-foot"><div class="pulse-dot"></div><div><b id="side-status">Подключение</b><span id="side-action">Ожидание ядра</span></div></div>
@@ -39,22 +40,29 @@
               <span class="ok-chip" id="overall-state">ПРОВЕРКА</span>
             </div>
           </section>
-          <section class="panel clock-card" id="clock-card" aria-label="Время">
-            <div class="clock-greet" id="clock-greet"></div>
-            <div class="clock-time" id="clock-time">--:--</div>
-            <div class="clock-date" id="clock-date"></div>
-            <div class="clock-meta"><span class="pill" id="clock-tz"></span><span class="pill" id="clock-week"></span><span class="pill" id="clock-doy"></span></div>
-            <div><div class="daybar"><span id="daybar"></span></div><div class="daybar-label"><span>Прогресс дня</span><b id="daybar-pct">0%</b></div></div>
-            <div class="upcoming"><div class="up-title">БЛИЖАЙШЕЕ</div><div id="upcoming-list"></div></div>
-          </section>
-          <section class="panel calendar-card" id="calendar-card" aria-label="Календарь">
-            <div class="cal-head"><div class="cal-title" id="cal-title"></div><div class="cal-nav"><button id="cal-prev" aria-label="Предыдущий месяц">‹</button><button id="cal-today">Сегодня</button><button id="cal-next" aria-label="Следующий месяц">›</button></div></div>
-            <div class="cal-wrap">
-              <div class="cal-grid" id="cal-grid"></div>
-              <div class="notes"><h4 id="notes-title"></h4><div id="notes-list"></div><form class="note-form" id="note-form" autocomplete="off"><input id="note-input" maxlength="300" placeholder="Заметка на этот день…" aria-label="Заметка"><button class="primary" type="submit" aria-label="Добавить">+</button></form></div>
+          <section class="panel assist-card" aria-label="Ассистент">
+            <div class="panel-head"><div><span class="eyebrow">АССИСТЕНТ</span><h3>Kohakuyasha</h3></div><span class="ok-chip" id="ai-chip">—</span></div>
+            <div class="service-list">
+              <div><span>Модель</span><b id="ov-model">—</b></div>
+              <div><span>Фактов о вас</span><b id="ov-facts">—</b></div>
+              <div><span>Сообщений в чате</span><b id="ov-messages">—</b></div>
             </div>
+            <div class="btns"><button class="primary" id="ov-chat">Открыть чат</button><button id="ov-cabinet">Личный кабинет</button></div>
+          </section>
+          <section class="panel update-card" aria-label="Обновление">
+            <div class="panel-head"><div><span class="eyebrow">ПРОЕКТ</span><h3>Обновление</h3></div><span class="ok-chip" id="up-chip">—</span></div>
+            <div class="service-list">
+              <div><span>Установлено</span><b id="ov-version">—</b></div>
+              <div><span>Доступно на GitHub</span><b id="ov-remote">—</b></div>
+            </div>
+            <div class="btns"><button class="primary" id="ov-update">Перейти к обновлению</button></div>
           </section>
         </div>
+      </section>
+
+      <section class="page" id="page-update">
+        <div class="page-head"><div><p class="eyebrow">ПРОЕКТ</p><h1>Обновление</h1></div></div>
+        <div class="set-grid" id="update-root"></div>
       </section>
 
       <section class="page" id="page-settings">
@@ -112,6 +120,7 @@
   <script src="/static/core.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/overview.js"></script>
+  <script src="/static/update.js"></script>
   <script src="/static/settings.js"></script>
   <script src="/static/avatar.js"></script>
   <script src="/static/panels.js"></script>

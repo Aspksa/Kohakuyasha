@@ -89,9 +89,6 @@ class AppSettings:
     bg_dim: int = 45
     ui_zoom: int = 100
     animations: bool = True
-    clock_24h: bool = True
-    clock_seconds: bool = True
-    week_start: int = 1         # 1 = Monday, 0 = Sunday
     pattern: bool = True        # soft seigaiha wave pattern in the background
     petals: bool = True         # falling sakura petals
 
@@ -115,9 +112,6 @@ def validate_app(raw: dict[str, Any] | None) -> AppSettings:
         bg_dim=_int(raw.get("bg_dim"), d.bg_dim, 0, 85),
         ui_zoom=_int(raw.get("ui_zoom"), d.ui_zoom, 85, 130),
         animations=_bool(raw.get("animations"), d.animations),
-        clock_24h=_bool(raw.get("clock_24h"), d.clock_24h),
-        clock_seconds=_bool(raw.get("clock_seconds"), d.clock_seconds),
-        week_start=0 if raw.get("week_start") in (0, "0") else 1,
         pattern=_bool(raw.get("pattern"), d.pattern),
         petals=_bool(raw.get("petals"), d.petals),
     )
@@ -132,7 +126,6 @@ class MemorySettings:
     auto_facts: bool = True       # extract new facts from the conversation automatically
     extract_every: int = 3        # extract after this many new user messages
     use_summary: bool = True      # keep a rolling summary of older conversation
-    use_calendar: bool = True     # tell the assistant about today's and upcoming calendar notes
 
 
 def validate_memory(raw: dict[str, Any] | None) -> MemorySettings:
@@ -146,5 +139,4 @@ def validate_memory(raw: dict[str, Any] | None) -> MemorySettings:
         auto_facts=_bool(raw.get("auto_facts"), d.auto_facts),
         extract_every=_int(raw.get("extract_every"), d.extract_every, 1, 10),
         use_summary=_bool(raw.get("use_summary"), d.use_summary),
-        use_calendar=_bool(raw.get("use_calendar"), d.use_calendar),
     )

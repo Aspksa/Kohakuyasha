@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -144,23 +144,19 @@ def test_summary_folds_old_messages_and_history_window_skips_them(db: Database, 
     assert not brain.run_maintenance(db, ai.AISettings(), "k", mem)["summarized"]  # nothing left to fold
 
 
-def test_build_context_has_time_facts_summary_and_calendar(db: Database):
+def test_build_context_has_time_facts_and_summary(db: Database):
     now = datetime(2026, 10, 7, 9, 30)
     db.add_fact("Кошку зовут Мурка", "relation", 4, "auto")
     db.set_setting("memory_state", {"summary": "Обсуждали отпуск."})
-    db.add_event_note("2026-10-07", "Врач в 15:00")
-    db.add_event_note("2026-10-09", "День рождения мамы")
-    db.add_event_note("2026-10-20", "Слишком далеко")
     blocks, used = brain.build_context(db, prefs.MemorySettings(), "как зовут кошку", now)
     text = "\n".join(blocks)
     assert "среда, 7 октября 2026, 09:30" in text and "Мурка" in text and "Обсуждали отпуск" in text
-    assert "сегодня: Врач" in text and "9 октября: День рождения мамы" in text and "Слишком далеко" not in text
-    assert len(used) == 1 and brain.GUIDELINES in text
-    off = prefs.MemorySettings(use_facts=False, use_summary=False, use_calendar=False)
+    assert "календар" not in text.lower() and len(used) == 1 and brain.GUIDELINES in text
+    off = prefs.MemorySettings(use_facts=False, use_summary=False)
     blocks, used = brain.build_context(db, off, "кошка", now)
     assert len(blocks) == 1 and used == []  # only the clock
 
 
 def test_memory_settings_are_clamped():
-    m = prefs.validate_memory({"extract_every": 99, "auto_facts": "yes", "use_calendar": False})
-    assert m.extract_every == 10 and m.auto_facts is True and m.use_calendar is False
+    m = prefs.validate_memory({"extract_every": 99, "auto_facts": "yes", "use_summary": False})
+    assert m.extract_every == 10 and m.auto_facts is True and m.use_summary is False

@@ -3,7 +3,7 @@
   const $ = (q) => document.querySelector(q);
   const $$ = (q) => [...document.querySelectorAll(q)];
   const Koh = window.Koh;
-  const PAGES = ["overview", "settings"];
+  const PAGES = ["overview", "update", "settings"];
 
   function formatUptime(s) {
     s = Math.max(0, Number(s) || 0);
@@ -52,6 +52,8 @@
   go((location.hash || "#overview").slice(1));
   $("#greeting").textContent = Koh.greeting().replace(",", ",").replace(".", ".");
   refreshStatus();
-  setInterval(refreshStatus, 3000);
+  // Poll only while the tab is visible: a hidden page should cost nothing.
+  setInterval(() => { if (!document.hidden) refreshStatus(); }, 3000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshStatus(); });
   Koh.reload();
 })();

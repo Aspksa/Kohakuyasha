@@ -38,7 +38,9 @@
     const target = e.currentTarget, start = rectOf(panel), sx = e.clientX, sy = e.clientY;
     target.setPointerCapture(e.pointerId);
     panel.classList.add("moving");
-    const move = (ev) => {
+    let frame = 0, last = null;
+    const move = (ev) => { last = ev; if (!frame) frame = requestAnimationFrame(() => { frame = 0; step(last); }); };  // at most one layout per frame
+    const step = (ev) => {
       const dx = ev.clientX - sx, dy = ev.clientY - sy;
       let {x, y, w, h} = start;
       if (dir === "move") { x += dx; y += dy; }
@@ -56,6 +58,7 @@
       panel.dataset.free = "1"; apply(panel, {x, y, w, h});
     };
     const up = () => {
+      if (frame) { cancelAnimationFrame(frame); frame = 0; if (last) step(last); }
       target.removeEventListener("pointermove", move); target.removeEventListener("pointerup", up); target.removeEventListener("pointercancel", up);
       panel.classList.remove("moving"); store(name, panel);
     };

@@ -60,16 +60,6 @@ def test_memory_store_search_and_skip_recent_learned(tmp_path: Path):
     assert db.memory_stats()["imported"] == 0 and db.search_memory("кошку", 5, 0) == []
 
 
-def test_calendar_notes(tmp_path: Path):
-    db = Database(tmp_path / "c.db")
-    db.initialize()
-    a = db.add_event_note("2026-10-07", "день рождения")
-    db.add_event_note("2026-11-01", "позже")
-    assert [n["text"] for n in db.list_event_notes("2026-10-01", "2026-10-31")] == ["день рождения"]
-    assert db.day_note_count("2026-10-07") == 1
-    assert db.delete_event_note(a["id"]) and not db.delete_event_note(a["id"])
-
-
 def test_memory_is_formatted_into_system_prompt():
     prompt = ai.build_system_prompt(ai.AISettings(provider="cloudru"), {}, [{"title": "Про кошек", "role": "user", "content": "кошка Мурка"}])
     assert "Мурка" in prompt and "Про кошек" in prompt

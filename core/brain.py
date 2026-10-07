@@ -1,4 +1,4 @@
-"""Assistant 'brain': long-term facts, rolling summary, calendar/time awareness and prompt context assembly.
+"""Assistant 'brain': long-term facts, rolling summary, time awareness and prompt context assembly.
 
 Memory here is retrieval + distillation, not model training: the provider is asked to distil durable facts and
 a rolling summary, everything is stored locally in SQLite, and the relevant parts are injected into each request.
@@ -9,7 +9,7 @@ import dataclasses
 import json
 import re
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Callable
 
 from . import ai
@@ -80,21 +80,6 @@ def format_now(now: datetime) -> str:
     return f"Сейчас: {WEEKDAYS[now.weekday()]}, {now.day} {MONTHS[now.month - 1]} {now.year}, {now:%H:%M}."
 
 
-def format_calendar(notes: list[dict[str, Any]], today: datetime) -> str:
-    if not notes:
-        return ""
-    lines = []
-    for n in notes[:12]:
-        try:
-            d = datetime.strptime(n["day"], "%Y-%m-%d")
-        except ValueError:
-            continue
-        delta = (d.date() - today.date()).days
-        label = "сегодня" if delta == 0 else "завтра" if delta == 1 else f"{d.day} {MONTHS[d.month - 1]}"
-        lines.append(f"- {label}: {n['text']}")
-    return ("Заметки пользователя в календаре на ближайшие дни:\n" + "\n".join(lines)) if lines else ""
-
-
 GUIDELINES = (
     "Используй сведения выше естественно, как помощник, который давно знает пользователя: не перечисляй их без нужды "
     "и не выдумывай того, чего в них нет. Если сказанное сейчас противоречит памяти, верь пользователю. "
@@ -103,7 +88,7 @@ GUIDELINES = (
 
 
 def build_context(db: Database, mem: MemorySettings, query: str, now: datetime | None = None) -> tuple[list[str], list[int]]:
-    """System-prompt blocks (time, facts, summary, calendar) and the ids of the facts that were used."""
+    """System-prompt blocks (time, facts, summary) and the ids of the facts that were used."""
     now = now or datetime.now()
     blocks = [format_now(now)]
     used: list[int] = []
@@ -116,12 +101,6 @@ def build_context(db: Database, mem: MemorySettings, query: str, now: datetime |
         summary = (db.get_setting("memory_state", {}) or {}).get("summary", "")
         if summary:
             blocks.append("Краткое содержание более ранней части вашего общения:\n" + summary)
-    if mem.use_calendar:
-        start = now.strftime("%Y-%m-%d")
-        end = (now + timedelta(days=3)).strftime("%Y-%m-%d")
-        cal = format_calendar(db.list_event_notes(start, end), now)
-        if cal:
-            blocks.append(cal)
     if len(blocks) > 1:
         blocks.append(GUIDELINES)
     return blocks, used

@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.7.0",
+  "current_version": "0.8.0",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "assistant_brain_memory_v0.7.0",
+  "completed_stage": "github_update_performance_v0.8.0",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "80/80 passed",
+      "linux": "91/91 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.7.0"
+    "note": "Run on PR for v0.8.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -48,7 +48,9 @@
     "Cloud.ru endpoint https://foundation-models.api.cloud.ru/v1 and model ids deepseek-ai/DeepSeek-V4-Flash / deepseek-ai/DeepSeek-V4-Pro follow Cloud.ru catalog naming but could not be verified offline; both are editable in the cabinet.",
     "Cloud.ru calls are verified with mocks and a local fake server only, not with a real key.",
     "Fact extraction and summaries cost extra short provider requests (one per N user messages; configurable) and are verified with mocks and a local fake provider only.",
-    "Retrieval is lexical (FTS5 + crude Russian stemming); semantic embeddings remain future work."
+    "Retrieval is lexical (FTS5 + crude Russian stemming); semantic embeddings remain future work.",
+    "GitHub update was verified with unit tests and a local fake GitHub API only; the real api.github.com flow (and the Windows relaunch via PowerShell) still needs a physical test.",
+    "After a rollback the SQLite schema stays at the newer version (older code ignores extra tables)."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -100,11 +102,9 @@
     "resizable_movable_panels",
     "themes_black_white_auto_accents_backgrounds",
     "custom_background_upload",
-    "overview_clock_and_calendar_with_notes",
     "settings_page_extended",
     "cloudru_provider",
     "dialog_import_memory_fts",
-    "calendar_notes",
     "chat_export",
     "kitsune_design_system",
     "seigaiha_pattern_and_petals",
@@ -115,7 +115,6 @@
     "overview_upcoming_notes",
     "cloudru_only_provider",
     "deepseek_v4_flash_pro_models",
-    "compact_overview_dashboard",
     "stable_responsive_layout",
     "cabinet_sidebar_layout",
     "transparent_full_avatar",
@@ -125,7 +124,14 @@
     "rolling_conversation_summary",
     "calendar_and_time_awareness",
     "facts_ranking_and_dedupe",
-    "editable_facts_ui"
+    "editable_facts_ui",
+    "github_self_update",
+    "update_backup_and_rollback",
+    "update_page_and_badge",
+    "private_repo_token",
+    "backdrop_filter_removed",
+    "static_cache_revalidation",
+    "compact_overview_assistant_and_update_cards"
   ],
-  "next_action": "Merge v0.7.0 after green Windows+Linux CI; verify with a real Cloud.ru key that extraction returns valid JSON for the chosen model; then consider embeddings or reminders from calendar notes."
+  "next_action": "Merge v0.8.0 after green Windows+Linux CI; on Windows, check that the site feels fast, then use Обновление → Проверить обновления against the real repository (private repo needs a read-only token)."
 }

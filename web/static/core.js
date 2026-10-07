@@ -4,7 +4,7 @@
   const Koh = window.Koh = {
     settings: {
       avatar: {active_face: "default", crop: "face", shape: "soft", size: 96, opacity: 100, ring: false, ring_color: "#e8be56", glow: true, glow_color: "#e8be56", status_dot: true, animation: "none", snap_edges: false, idle_dim: false, hide_on_open: false, greeting: true, left_action: "chat", right_action: "cabinet", replace_logo: true},
-      faces: [DEFAULT_FACE], ai: {provider: "none"}, app: {clock_24h: true, clock_seconds: true, week_start: 1}, memory: {enabled: true, learn_chat: true, max_snippets: 6},
+      faces: [DEFAULT_FACE], ai: {provider: "none"}, app: {}, memory: {enabled: true, learn_chat: true, max_snippets: 6, use_facts: true, auto_facts: true, extract_every: 3, use_summary: true},
     },
     listeners: [],
     hooks: {},

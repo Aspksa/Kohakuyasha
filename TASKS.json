@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 15,
+  "next_id": 16,
   "tasks": [
     {
       "id": "task-001",
@@ -163,6 +163,16 @@
         "hybrid lexical+semantic retrieval",
         "reminders delivered via tray notification"
       ]
+    },
+    {
+      "id": "task-015",
+      "title": "v0.8.0: GitHub self-update, performance fix, clock/calendar removal",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-013"
+      ],
+      "result": "See CHANGELOG change-0014."
     }
   ]
 }

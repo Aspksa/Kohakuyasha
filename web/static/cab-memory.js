@@ -9,7 +9,7 @@
     const data = await Koh.api("/api/memory"), m = data.settings, nodes = [], status = ui.statusLine();
     const saveSettings = Koh.debounce(async () => { try { await Koh.api("/api/settings/memory", {method: "PUT", body: JSON.stringify(m)}); Koh.settings.memory = {...m}; } catch { Koh.toast("Не удалось сохранить настройки памяти"); } }, 300);
 
-    nodes.push(el("p", "hint", "Память — не дообучение модели. Kohakuyasha запоминает факты о вас, ведёт краткое содержание беседы, знает дату и ваши заметки из календаря и при каждом ответе подставляет нужное в запрос. Всё хранится локально."));
+    nodes.push(el("p", "hint", "Память — не дообучение модели. Kohakuyasha запоминает факты о вас, ведёт краткое содержание беседы, знает текущие дату и время и при каждом ответе подставляет нужное в запрос. Всё хранится локально."));
 
     // ---------- stats ----------
     const stats = el("div", "stat-grid");
@@ -71,7 +71,6 @@
       ui.toggle("Знать факты обо мне", m.use_facts, v => { m.use_facts = v; saveSettings(); }, "Подставлять нужные факты в каждый запрос"),
       ui.toggle("Находить факты сама", m.auto_facts, v => { m.auto_facts = v; saveSettings(); }, "Отдельный короткий запрос к ИИ после нескольких сообщений"), every,
       ui.toggle("Помнить ход беседы", m.use_summary, v => { m.use_summary = v; saveSettings(); }, "Старые сообщения сжимаются в краткое содержание"),
-      ui.toggle("Знать мой календарь", m.use_calendar, v => { m.use_calendar = v; saveSettings(); }, "Сегодняшние и ближайшие заметки, дата и время"),
       ui.toggle("Запоминать сообщения чата для поиска", m.learn_chat, v => { m.learn_chat = v; saveSettings(); }),
       ui.range("", 1, 12, 1, m.max_snippets, v => `Фрагментов из диалогов в запросе: ${v}`, v => { m.max_snippets = v; saveSettings(); }));
     nodes.push(sets);

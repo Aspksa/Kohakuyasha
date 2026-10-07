@@ -118,3 +118,15 @@ Clock, calendar cells and the side column use fixed pixel sizes and the page con
 **Status:** Active
 
 Beyond retrieval over imported dialogs (D-015) the assistant keeps (a) a facts table distilled from conversations by a short, low-cost provider request every N user messages or immediately for «Запомни …», (b) a rolling summary of older messages, and (c) the current date/time and upcoming calendar notes. Facts are ranked by importance, pinning, word overlap and recency, near-duplicates are merged, and every fact can be edited, pinned or deleted in the cabinet. Extraction runs after the reply in a background thread and never blocks or fails a chat turn; provider errors are logged as events. Nothing leaves the machine except the prompts sent to Cloud.ru.
+
+## D-021 — Self-update from GitHub with backups
+**Date:** 2026-10-07
+**Status:** Active
+
+The project updates itself from the configured GitHub repository (default Aspksa/Kohakuyasha, branch main). The updater reads the remote `VERSION`, shows newer `CHANGELOG.jsonl` entries, downloads the branch zipball over HTTPS, validates it (required files, no path traversal, size limits), and replaces only files outside the protected paths (`data/`, `logs/`, `.runtime/`, `.git/`, `.kohakuyasha-id`; `tests/` and `.github/` are not installed). Every replaced or removed file is copied to `.runtime/backups/<from>-<time>` first (last 3 kept) and a failed apply is undone; a manifest lets later updates delete files a release dropped. Nothing is installed without a user click; auto-check only shows a badge. A private repository needs a fine-grained read-only token stored in `data/secrets.json` (never returned, never forwarded to another host on redirect). A new version takes effect after a full relaunch (`Kohakuyasha.bat`, started by a short detached PowerShell on Windows).
+
+## D-022 — No backdrop blur; calendar and clock removed
+**Date:** 2026-10-07
+**Status:** Active
+
+`backdrop-filter` is banned in the UI: measurements showed it dominated frame time. Panels use opaque or high-opacity backgrounds; background glows are radial gradients. The clock and calendar (and the assistant's calendar context) were removed at the owner's request; the overview shows status, assistant and update cards.

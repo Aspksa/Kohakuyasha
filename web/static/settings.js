@@ -71,13 +71,6 @@
     look.append(row("Анимации", "Отключите, если интерфейс кажется тяжёлым", sw(a.animations, v => change({animations: v}))));
     nodes.push(look);
 
-    // ----- time -----
-    const time = card("Время и календарь", "Как показываются часы и недели на странице «Обзор».");
-    time.append(row("24-часовой формат", "Выключите для формата AM/PM", sw(a.clock_24h, v => change({clock_24h: v}))));
-    time.append(row("Показывать секунды", "", sw(a.clock_seconds, v => change({clock_seconds: v}))));
-    time.append(field("Неделя начинается с", seg([[1, "Понедельник"], [0, "Воскресенье"]], a.week_start, v => change({week_start: Number(v)}))));
-    nodes.push(time);
-
     // ----- startup -----
     const start = card("Запуск", "Поведение при включении компьютера и при запуске Kohakuyasha.");
     const auto = sw(false, () => {}), autoInput = auto.querySelector("input");
