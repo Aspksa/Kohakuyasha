@@ -94,3 +94,9 @@ Imported dialogs, notes and (optionally) live chat are stored in SQLite and sear
 **Status:** Active
 
 Observation, Tests and Journal pages were removed from the UI at the owner's request. Diagnostics and event APIs remain for the tray and export. Appearance, clock and startup options live in Settings; AI, avatar and memory live in the personal cabinet.
+
+## D-017 — Visual identity: soft kitsune style
+**Date:** 2026-10-07
+**Status:** Active
+
+The interface uses a soft fox-spirit look: serif display headings, gradient-edged rounded cards, a faint seigaiha wave pattern, glowing tail-shaped light blobs and slow sakura petals. All components share radius/shadow/button tokens in `app.css`. Decorations are optional (Settings: pattern, petals, animations) and never carry information. Stopping a reply is cooperative: the provider call cannot be aborted, so the answer is discarded server-side via `/api/chat/cancel`.

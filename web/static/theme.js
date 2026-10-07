@@ -14,6 +14,8 @@
     root.dataset.accent = app.accent || "gold";
     root.dataset.bg = app.background || "glow";
     root.dataset.motion = app.animations === false ? "off" : "on";
+    root.dataset.pattern = app.pattern === false ? "off" : "on";
+    root.dataset.petals = app.petals === false ? "off" : "on";
     root.style.setProperty("--ui-zoom", String((app.ui_zoom || 100) / 100));
     root.style.setProperty("--dim", String((app.bg_dim ?? 45) / 100));
     root.style.setProperty("--bg-image", app.bg_image ? `url("/media/${app.bg_image}")` : "none");

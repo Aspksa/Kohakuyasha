@@ -39,6 +39,14 @@
   $$(".nav").forEach(x => x.addEventListener("click", () => go(x.dataset.page)));
   $("#refresh").addEventListener("click", () => { refreshStatus(); if (Koh.refreshOverview) Koh.refreshOverview(); Koh.toast("Обновлено"); });
   window.addEventListener("hashchange", () => go((location.hash || "#overview").slice(1)));
+  // drifting sakura petals (purely decorative; hidden by the Petals/Animations settings)
+  const petals = $("#petals");
+  if (petals) for (let i = 0; i < 12; i++) {
+    const p = document.createElement("i"); p.className = "petal";
+    p.style.left = (Math.random() * 100).toFixed(1) + "%"; p.style.animationDuration = (16 + Math.random() * 16).toFixed(1) + "s";
+    p.style.animationDelay = (-Math.random() * 30).toFixed(1) + "s"; p.style.scale = (0.7 + Math.random() * 0.8).toFixed(2);
+    petals.append(p);
+  }
   Koh.refreshStatus = refreshStatus;
   Koh.go = go;
   go((location.hash || "#overview").slice(1));

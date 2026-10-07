@@ -71,7 +71,15 @@
       const d = await Koh.api(`/api/calendar?start=${ymd(start)}&end=${ymd(end)}`);
       state.notes = {}; (d.notes || []).forEach(n => { (state.notes[n.day] = state.notes[n.day] || []).push(n); });
     } catch { state.notes = {}; }
-    renderCalendar(); renderNotes();
+    renderCalendar(); renderNotes(); loadUpcoming();
+  }
+  const shortDay = new Intl.DateTimeFormat("ru-RU", {day: "numeric", month: "short"});
+  async function loadUpcoming() {
+    const list = $("#upcoming-list"), now = new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30);
+    try {
+      const d = await Koh.api(`/api/calendar?start=${ymd(now)}&end=${ymd(end)}`), notes = (d.notes || []).slice(0, 4);
+      list.replaceChildren(...(notes.length ? notes.map(n => { const r = el("div", "u-row"); r.append(el("span", "u-date", n.day === ymd(now) ? "Сегодня" : shortDay.format(fromYmd(n.day))), el("span", "", n.text)); return r; }) : [el("div", "u-empty", "Ближайших заметок нет. Добавьте их в календаре.")]));
+    } catch { list.replaceChildren(); }
   }
   function renderCalendar() {
     const grid = $("#cal-grid"), {start} = gridRange(), todayStr = ymd(new Date()), nodes = [];

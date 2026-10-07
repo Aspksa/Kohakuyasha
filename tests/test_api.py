@@ -306,3 +306,18 @@ def test_calendar_and_chat_export(tmp_path: Path):
     client.post("/api/chat", headers=ACTION, json={"text": "привет"})
     exp = client.get("/api/chat/export")
     assert exp.status_code == 200 and "attachment" in exp.headers["content-disposition"] and len(exp.json()["messages"]) == 2
+
+
+def test_stop_discards_the_answer_and_validates_request_id(monkeypatch, tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    client.put("/api/settings/ai", headers=ACTION, json={"provider": "openai", "base_url": "http://127.0.0.1:1/v1"})
+    monkeypatch.setattr("core.ai._http_post_json", lambda u, h, b: {"choices": [{"message": {"content": "поздно"}}]})
+    assert client.post("/api/chat/cancel", headers=ACTION, json={"request_id": ""}).status_code == 400
+    assert client.post("/api/chat/cancel", json={"request_id": "r1"}).status_code == 403
+    assert client.post("/api/chat/cancel", headers=ACTION, json={"request_id": "r1"}).json() == {"cancelled": "r1"}
+    r = client.post("/api/chat", headers=ACTION, json={"text": "привет", "request_id": "r1"}).json()
+    assert r["cancelled"] is True and [m["role"] for m in r["messages"]] == ["user"]
+    assert db.chat_count() == 1 and db.memory_stats()["learned"] == 0
+    r = client.post("/api/chat", headers=ACTION, json={"text": "ещё раз", "request_id": "r1"}).json()  # the id was consumed
+    assert [m["role"] for m in r["messages"]] == ["user", "assistant"]

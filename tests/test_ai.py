@@ -98,3 +98,10 @@ def test_http_error_is_sanitized(monkeypatch):
 def test_assistant_not_connected_message():
     out = assistant.reply(ai.AISettings(), "", {}, [{"role": "user", "content": "hi"}])
     assert out == assistant.NOT_CONNECTED
+
+
+def test_new_appearance_flags_are_validated():
+    a = prefs.validate_app({"pattern": False, "petals": "no"})
+    assert a.pattern is False and a.petals is True
+    d = prefs.validate_app({})
+    assert d.pattern is True and d.petals is True and d.theme == "dark"

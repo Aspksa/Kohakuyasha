@@ -66,8 +66,8 @@
       side.append(acts); box.append(crop, side); editorBox.replaceChildren(box); place();
     }
     drawFaces(); facesSec.append(gallery, fileInput, editorBox, el("p", "hint", "PNG, JPEG, WebP или GIF до 6 МБ. Загруженное изображение перекодируется на сервере; можно хранить до 12 лиц."));
+    facesSec.append(ui.toggle("Заменять логотип лицом", a.replace_logo, v => change({replace_logo: v}), "В меню слева и на странице «Обзор»"));
     nodes.push(facesSec);
-    nodes.push(ui.toggle("Заменять логотип лицом", a.replace_logo, v => change({replace_logo: v}), "В меню слева и на странице «Обзор»"));
 
     // ----- look -----
     const look = ui.section("ВИД");

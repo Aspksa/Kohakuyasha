@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" data-theme="dark" data-accent="gold" data-bg="glow">
+<html lang="ru" data-theme="dark" data-accent="gold" data-bg="glow" data-pattern="on" data-petals="on">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -11,7 +11,7 @@
   <script src="/static/theme.js"></script>
 </head>
 <body>
-  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div><div class="ambient ambient-c"></div><div class="petals" id="petals" aria-hidden="true"></div>
   <div class="shell">
     <aside class="sidebar">
       <div class="brand"><img src="/static/logo.svg" data-logo alt=""><div><strong>Kohakuyasha</strong><span>личная система</span></div></div>
@@ -34,6 +34,7 @@
             <div class="clock-time" id="clock-time">--:--</div>
             <div class="clock-date" id="clock-date"></div>
             <div class="clock-meta"><span class="pill" id="clock-tz"></span><span class="pill" id="clock-week"></span><span class="pill" id="clock-doy"></span></div>
+            <div class="upcoming"><div class="up-title">Ближайшее</div><div id="upcoming-list"></div></div>
             <div><div class="daybar"><span id="daybar"></span></div><div class="daybar-label"><span>Прогресс дня</span><b id="daybar-pct">0%</b></div></div>
           </section>
           <section class="panel" id="calendar-card" aria-label="Календарь">
