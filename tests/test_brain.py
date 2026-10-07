@@ -180,7 +180,7 @@ def test_build_context_has_time_facts_and_summary(db: Database):
     assert "календар" not in text.lower() and len(used) == 1 and brain.GUIDELINES in text
     off = prefs.MemorySettings(use_facts=False, use_summary=False)
     blocks, used = brain.build_context(db, off, "кошка", now)
-    assert len(blocks) == 2 and used == []  # clock plus cognition mode
+    assert len(blocks) == 3 and used == []  # clock + cognition mode + working memory
 
 
 def test_memory_settings_are_clamped():
