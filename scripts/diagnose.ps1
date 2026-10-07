@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Root)
+﻿param([Parameter(Mandatory=$true)][string]$Root)
 $Root = (Resolve-Path $Root).Path.TrimEnd("\")
 $state = Join-Path $Root "data\runtime.json"
 if (-not (Test-Path -LiteralPath $state)) { Write-Host "Kohakuyasha не запущена." -ForegroundColor Yellow; exit 1 }

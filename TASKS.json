@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 4,
+  "next_id": 5,
   "tasks": [
     {
       "id": "task-001",
@@ -12,10 +12,12 @@
     },
     {
       "id": "task-002",
-      "title": "Validate Kohakuyasha v0.1.1 on physical Windows",
+      "title": "Validate Kohakuyasha v0.1.2 on physical Windows",
       "priority": 100,
       "status": "queued",
-      "depends_on": ["task-003"],
+      "depends_on": [
+        "task-004"
+      ],
       "acceptance": [
         "Kohakuyasha.bat launches from a removable drive",
         "Pinned portable Python downloads when no suitable system Python exists",
@@ -33,8 +35,20 @@
       "title": "Security and reliability hardening v0.1.1",
       "priority": 100,
       "status": "completed",
-      "depends_on": ["task-001"],
+      "depends_on": [
+        "task-001"
+      ],
       "result": "Closed browser-origin attack surface, hardened runtime/bootstrap/restart/database/config/tray/UI, separated dev tests and expanded automated coverage to 17 tests."
+    },
+    {
+      "id": "task-004",
+      "title": "Establish Windows and Linux CI baseline v0.1.2",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-003"
+      ],
+      "result": "Added GitHub Actions validation on Windows and Linux with pinned Python 3.13.16; CI exposed and fixed Windows SQLite handle locking and PowerShell 5.1 UTF-8 BOM compatibility. Final run passed on both platforms."
     }
   ]
 }

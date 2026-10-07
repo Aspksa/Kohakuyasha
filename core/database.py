@@ -4,6 +4,7 @@ import json
 import shutil
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,32 +31,49 @@ class Database:
         conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
+    @contextmanager
+    def session(self):
+        conn = self.connect()
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     @staticmethod
     def _check_file(path: Path) -> tuple[bool, str]:
         if not path.exists() or path.stat().st_size == 0:
             return True, "empty"
+        conn = None
         try:
-            with sqlite3.connect(path, timeout=5) as conn:
-                value = conn.execute("PRAGMA quick_check").fetchone()[0]
+            conn = sqlite3.connect(path, timeout=5)
+            value = conn.execute("PRAGMA quick_check").fetchone()[0]
             return value == "ok", str(value)
         except sqlite3.DatabaseError as exc:
             return False, str(exc)
+        finally:
+            if conn is not None:
+                conn.close()
 
     def _existing_schema_version(self) -> int:
         if not self.path.exists() or self.path.stat().st_size == 0:
             return 0
+        conn = None
         try:
-            with sqlite3.connect(self.path) as conn:
-                table = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'").fetchone()
-                if not table:
-                    return 0
-                row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
-                return int(row[0]) if row else 0
+            conn = sqlite3.connect(self.path)
+            table = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'").fetchone()
+            if not table:
+                return 0
+            row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+            return int(row[0]) if row else 0
         except (sqlite3.DatabaseError, ValueError):
             return 0
+        finally:
+            if conn is not None:
+                conn.close()
 
     def _apply_schema(self) -> None:
-        with self.connect() as conn:
+        with self.session() as conn:
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS meta (
@@ -139,7 +157,7 @@ class Database:
     ) -> int:
         created_at = created_at or datetime.now(timezone.utc).isoformat()
         payload_json = json.dumps(payload, ensure_ascii=False) if payload is not None else None
-        with self._lock, self.connect() as conn:
+        with self._lock, self.session() as conn:
             cur = conn.execute(
                 "INSERT INTO events(created_at, level, source, event_type, message, payload_json) VALUES (?, ?, ?, ?, ?, ?)",
                 (created_at, level, source, event_type, message, payload_json),
@@ -148,7 +166,7 @@ class Database:
 
     def recent_events(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(int(limit), 1000))
-        with self._lock, self.connect() as conn:
+        with self._lock, self.session() as conn:
             rows = conn.execute(
                 "SELECT id, created_at, level, source, event_type, message, payload_json FROM events ORDER BY id DESC LIMIT ?",
                 (limit,),
@@ -168,7 +186,7 @@ class Database:
         return result
 
     def integrity_check(self) -> tuple[bool, str]:
-        with self._lock, self.connect() as conn:
+        with self._lock, self.session() as conn:
             value = conn.execute("PRAGMA integrity_check").fetchone()[0]
         return value == "ok", str(value)
 
@@ -199,7 +217,7 @@ class Database:
 
     def trim_events(self, keep: int) -> None:
         keep = max(100, int(keep))
-        with self._lock, self.connect() as conn:
+        with self._lock, self.session() as conn:
             conn.execute(
                 "DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT ?)",
                 (keep,),

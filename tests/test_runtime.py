@@ -1,5 +1,34 @@
 import socket
-from pathlib import Paths
+from pathlib import Path
 
 from core.config import Paths
-from core.runtime import RuntimeState, find_free_port°Á½ÉÑ}¥Í}½Á•¸(()‘•˜Ñ•ÍÑ}™¥¹‘}™É••}Á½ÉĞ ¤è(€€€Á½ÉĞ€ô™¥¹‘}™É••}Á½ÉĞ ˆÄÈÜ¸À¸À¸Äˆ°€ÄàÜÄÀ°ÍÁ…¸ôÔ¤(€€€İ¥Ñ Í½­•Ğ¹Í½­•Ğ ¤…ÌÍ½¬è(€€€€€€€Í½¬¹‰¥¹  ˆÄÈÜ¸À¸À¸Äˆ°Á½ÉĞ¤¤(()‘•˜Ñ•ÍÑ}ÉÕ¹Ñ¥µ•}Í¹…ÁÍ¡½Ñ}…¹‘}±•…¹ÕÀ¡ÑµÁ}Á…Ñ èA…Ñ ¤è(€€€Á…Ñ¡Ì€ôA…Ñ¡Ì¡ÑµÁ}Á…Ñ ¤(€€€Á…Ñ¡Ì¹•¹ÍÕÉ” ¤(€€€ÍÑ…Ñ”€ôIÕ¹Ñ¥µ•MÑ…Ñ”¡Á…Ñ¡Ì°€ˆÀ¸Ä¸Äˆ°Á½ÉĞôàÜÄÀ¤(€€€ÍÑ…Ñ”¹Á•ÉÍ¥ÍĞ ¤(€€€Í¹…À€ôÍÑ…Ñ”¹Í¹…ÁÍ¡½Ğ ¤(€€€…ÍÍ•ÉĞÍ¹…Ál‰Ù•ÉÍ¥½¸‰t€ôô€ˆÀ¸Ä¸Äˆ(€€€…ÍÍ•ÉĞÍ¹…Ál‰Á½ÉĞ‰t€ôô€àÜÄÀ(€€€…ÍÍ•ÉĞÁ…Ñ¡Ì¹ÉÕ¹Ñ¥µ•}ÍÑ…Ñ”¹•á¥ÍÑÌ ¤(€€€ÍÑ…Ñ”¹±•…É}Á•ÉÍ¥ÍÑ• ¤(€€€…ÍÍ•ÉĞ¹½ĞÁ…Ñ¡Ì¹ÉÕ¹Ñ¥µ•}ÍÑ…Ñ”¹•á¥ÍÑÌ ¤(()‘•˜Ñ•ÍÑ}Á½ÉÑ}¥Í}½Á•¸ ¤è(€€€Í½¬€ôÍ½­•Ğ¹Í½­•Ğ ¤(€€€Í½¬¹‰¥¹  ˆÄÈÜ¸À¸À¸Äˆ°€À¤¤(€€€Í½¬¹±¥ÍÑ•¸ Ä¤(€€€ÑÉäè(€€€€€€€…ÍÍ•ÉĞÁ½ÉÑ}¥Í}½Á•¸ ˆÄÈÜ¸À¸À¸Äˆ°Í½¬¹•ÑÍ½­¹…µ” ¥lÅt¤(€€€™¥¹…±±äè(€€€€€€€Í½¬¹±½Í” ¤(
+from core.runtime import RuntimeState, find_free_port, port_is_open
+
+
+def test_find_free_port():
+    port = find_free_port("127.0.0.1", 18710, span=5)
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", port))
+
+
+def test_runtime_snapshot_and_cleanup(tmp_path: Path):
+    paths = Paths(tmp_path)
+    paths.ensure()
+    state = RuntimeState(paths, "0.1.1", port=8710)
+    state.persist()
+    snap = state.snapshot()
+    assert snap["version"] == "0.1.1"
+    assert snap["port"] == 8710
+    assert paths.runtime_state.exists()
+    state.clear_persisted()
+    assert not paths.runtime_state.exists()
+
+
+def test_port_is_open():
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(1)
+    try:
+        assert port_is_open("127.0.0.1", sock.getsockname()[1])
+    finally:
+        sock.close()

@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / pinned Python
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: PYTHON_VERSION
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+
+      - name: Install developer dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          python -m pip install --disable-pip-version-check -r requirements-dev.lock
+
+      - name: Verify runtime lock excludes developer test tooling
+        shell: python
+        run: |
+          from pathlib import Path
+          runtime = Path('requirements.lock').read_text(encoding='utf-8').lower()
+          assert 'pytest' not in runtime
+          assert 'httpx' not in runtime
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Compile Python sources
+        run: python -m compileall -q core launcher.pyw main.py
+
+      - name: Validate JavaScript syntax
+        run: node --check web/static/app.js
+
+      - name: Parse Windows PowerShell scripts with Windows PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $failed = $false
+          Get-ChildItem scripts -Filter *.ps1 | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              Write-Host "Parser errors in $($_.Name):" -ForegroundColor Red
+              $errors | ForEach-Object { Write-Host $_.Message -ForegroundColor Red }
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 }
