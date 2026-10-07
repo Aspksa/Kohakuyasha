@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 20,
+  "next_id": 21,
   "tasks": [
     {
       "id": "task-001",
@@ -216,6 +216,21 @@
         "complex requests get guarded second-pass review",
         "follow-ups reuse conversational context",
         "memory retrieval is relevance-first",
+        "Linux and Windows CI pass"
+      ]
+    },
+    {
+      "id": "task-020",
+      "title": "v0.12.0 Brain v3: working memory and contradiction awareness",
+      "priority": 100,
+      "status": "in_progress",
+      "depends_on": [
+        "task-019"
+      ],
+      "acceptance": [
+        "current goal and recent constraints enter working memory",
+        "likely contradictory selected facts are surfaced",
+        "memory guidelines are omitted when no long-term memory is present",
         "Linux and Windows CI pass"
       ]
     }
