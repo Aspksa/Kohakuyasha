@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 21,
+  "next_id": 22,
   "tasks": [
     {
       "id": "task-001",
@@ -224,7 +224,7 @@
       "id": "task-020",
       "title": "v0.12.0 Brain v3: working memory and contradiction awareness",
       "priority": 100,
-      "status": "in_progress",
+      "status": "completed",
       "depends_on": [
         "task-019"
       ],
@@ -232,6 +232,23 @@
         "current goal and recent constraints enter working memory",
         "likely contradictory selected facts are surfaced",
         "memory guidelines are omitted when no long-term memory is present",
+        "Linux and Windows CI pass"
+      ],
+      "result": "See CHANGELOG change-0021."
+    },
+    {
+      "id": "task-021",
+      "title": "v0.13.0 Brain v4: planning, confidence and task continuity",
+      "priority": 100,
+      "status": "in_progress",
+      "depends_on": [
+        "task-020"
+      ],
+      "acceptance": [
+        "deep tasks receive a local multi-step planning policy without an extra provider call",
+        "material uncertainty is surfaced without hedging known facts",
+        "short continuation commands reuse the previous assistant task state",
+        "new contradictory auto-facts replace stale auto-facts",
         "Linux and Windows CI pass"
       ]
     }
