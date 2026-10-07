@@ -126,5 +126,11 @@
     root.replaceChildren(...nodes);
   }
   Koh.refreshUpdate = load;
+  Koh.restartProject = restart;
+  Koh.installUpdate = async () => {
+    const r = await Koh.api("/api/update/install", {method: "POST", body: "{}"});
+    if (r.state) { state = r.state; publish(); draw(`Установлена v${r.result.version}: изменено файлов ${r.result.changed}, добавлено ${r.result.added}, удалено ${r.result.removed}.`); }
+    return r;
+  };
   load();
 })();

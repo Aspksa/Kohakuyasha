@@ -166,6 +166,44 @@
     try { await api("/api/chat", {method: "DELETE"}); renderEmpty(); } catch { addError("Не удалось очистить чат."); }
   }
 
+  // ---------- notification cards (above the composer) ----------
+  const noticeBox = document.getElementById("chat-notices");
+  let noticeBusy = false;
+  async function resolveNotice(n) { try { await api(`/api/notifications/${n.id}/resolve`, {method: "POST", body: "{}"}); } catch {} loadNotices(false); }
+  async function runAction(n, a, card) {
+    if (a.id === "dismiss") { await resolveNotice(n); return; }
+    if (a.id === "update_details") { Koh.close(); if (Koh.go) Koh.go("update"); return; }
+    if (a.id === "restart") { if (Koh.restartProject) { Koh.close(); await resolveNotice(n); Koh.restartProject(); } return; }
+    if (a.id === "update_install") {
+      if (noticeBusy) return; noticeBusy = true;
+      card.querySelectorAll("button").forEach(b => { b.disabled = true; });
+      card.querySelector(".nbody").textContent = "Скачиваю и устанавливаю обновление…";
+      try { await Koh.installUpdate(); } catch (e) { card.querySelector(".nbody").textContent = e.message || "Не удалось установить обновление."; noticeBusy = false; setTimeout(() => loadNotices(false), 4000); return; }
+      noticeBusy = false; loadNotices(false);
+    }
+  }
+  function drawNotices(list) {
+    const cards = list.map(n => {
+      const card = el("div", `notice ${n.kind}`), head = el("div", "ntitle", n.title);
+      card.append(head, el("div", "nbody", n.body));
+      const btns = el("div", "nbtns");
+      (n.actions || []).forEach(a => { const b = el("button", a.primary ? "primary" : "", a.label); b.type = "button"; b.addEventListener("click", () => runAction(n, a, card)); btns.append(b); });
+      if (btns.children.length) card.append(btns);
+      return card;
+    });
+    noticeBox.replaceChildren(...cards);
+    noticeBox.hidden = !cards.length;
+  }
+  async function loadNotices(markSeen) {
+    if (noticeBusy) return;
+    try {
+      const d = await api("/api/notifications");
+      drawNotices(d.notifications);
+      if (markSeen && d.notifications.some(n => n.status === "new")) { await api("/api/notifications/seen", {method: "POST", body: "{}"}); if (Koh.refreshStatus) Koh.refreshStatus(); }
+    } catch {}
+  }
+  Koh.hooks.notices = () => loadNotices(true);
+
   // ---------- composer ----------
   function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
   function updateSend() {
@@ -187,6 +225,6 @@
   }
   Koh.onSettings(renderStatus);
   Koh.hooks.chatReset = () => { if (loaded) renderEmpty(); };
-  Koh.hooks.chat = () => { renderStatus(); setTimeout(() => input.focus(), 0); if (!loaded) load(); else toBottom(true); };
+  Koh.hooks.chat = () => { renderStatus(); loadNotices(true); setTimeout(() => input.focus(), 0); if (!loaded) load(); else toBottom(true); };
   renderStatus();
 })();

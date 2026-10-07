@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, Header, Request, WebSocket, WebSocketDisconne
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, assistant, autostart, brain, media, memory, prefs, updater
+from . import ai, assistant, autostart, brain, media, memory, notifier as notifier_mod, prefs, updater
 from .config import ConfigStore, Paths
 from .database import Database
 from .diagnostics import Diagnostics
@@ -30,6 +30,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     cancelled_requests: dict[str, float] = {}
     app.state.run_background = lambda fn: threading.Thread(target=fn, daemon=True, name="kohakuyasha-memory").start()
     secrets = ai.SecretStore(paths.secrets)
+    notifier = notifier_mod.Notifier(db, runtime, events)
 
     def load_character() -> dict:
         try:
@@ -143,12 +144,15 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
 
     @app.get("/api/status")
     async def status():
-        settings, snap, autostart_enabled = await asyncio.gather(
+        settings, snap, autostart_enabled, unread = await asyncio.gather(
             asyncio.to_thread(config.load),
             asyncio.to_thread(runtime.snapshot),
             asyncio.to_thread(autostart.is_enabled),
+            asyncio.to_thread(db.unread_notifications),
         )
+        latest = unread[-1] if unread else None
         return {
+            "notifications": {"unread": len(unread), "latest": {"id": latest["id"], "kind": latest["kind"], "title": latest["title"]} if latest else None},
             "runtime": snap,
             "settings": {
                 "language": settings.language,
@@ -585,14 +589,23 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         await asyncio.to_thread(secrets.delete, "github_token")
         return await asyncio.to_thread(update_state)
 
+    def do_update_check() -> dict:
+        cfg = update_settings()
+        info = updater.check(cfg.repo, cfg.branch, secrets.get("github_token"), runtime.version)
+        db.set_setting("update_info", info)
+        notifier.update_available(info, runtime.version)
+        return info
+
+    def background_update_check() -> None:
+        if update_settings().auto_check:
+            do_update_check()
+
     @app.post("/api/update/check")
     async def update_check():
-        cfg = await asyncio.to_thread(update_settings)
         try:
-            info = await asyncio.to_thread(updater.check, cfg.repo, cfg.branch, secrets.get("github_token"), runtime.version)
+            await asyncio.to_thread(do_update_check)
         except updater.UpdateError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=502)
-        await asyncio.to_thread(db.set_setting, "update_info", info)
         return await asyncio.to_thread(update_state)
 
     @app.post("/api/update/install")
@@ -612,6 +625,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         except updater.UpdateError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=409 if "актуальная" in str(exc) else 502)
         events.emit(f"Проект обновлён до v{result['version']}", event_type="update", payload=result)
+        await asyncio.to_thread(notifier.update_installed, str(result["version"]), os.name == "nt")
         return {"result": result, "state": await asyncio.to_thread(update_state)}
 
     @app.post("/api/update/rollback")
@@ -629,6 +643,25 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         if started and runtime.on_shutdown:
             threading.Timer(0.6, runtime.on_shutdown).start()
         return {"relaunched": started}
+
+    # ---------- notifications ----------
+    @app.get("/api/notifications")
+    async def get_notifications():
+        return {"notifications": await asyncio.to_thread(db.list_notifications)}
+
+    @app.post("/api/notifications/seen")
+    async def notifications_seen():
+        return {"seen": await asyncio.to_thread(db.mark_notifications_seen)}
+
+    @app.post("/api/notifications/{nid}/resolve")
+    async def notification_resolve(nid: int):
+        if not await asyncio.to_thread(db.resolve_notification, nid):
+            return JSONResponse({"detail": "Уведомление не найдено."}, status_code=404)
+        return {"resolved": nid}
+
+    watcher = notifier_mod.UpdateWatcher(background_update_check)
+    app.router.on_startup.append(watcher.start)
+    app.router.on_shutdown.append(watcher.stop)
 
     @app.get("/api/events")
     async def recent_events(limit: int = 80):

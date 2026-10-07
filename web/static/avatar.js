@@ -102,7 +102,7 @@
   let bubble = null, bubbleTimer = 0, greeted = false;
   function hideBubble() { clearTimeout(bubbleTimer); if (bubble) { bubble.remove(); bubble = null; } }
   function showGreeting() {
-    if (greeted || !A().greeting || !chat.hidden || !cabinet.hidden) return;
+    if (greeted || bubble || avatar.classList.contains("has-notice") || !A().greeting || !chat.hidden || !cabinet.hidden) return;
     greeted = true; hideBubble();
     bubble = Koh.el("div", "av-bubble", Koh.greeting());
     document.body.append(bubble);
@@ -112,6 +112,29 @@
     bubble.addEventListener("click", () => { hideBubble(); show(chat, true); });
     bubbleTimer = setTimeout(hideBubble, 6500);
   }
+
+  // ---------- notifications: badge + bubble; the chat shows details and actions ----------
+  const badge = document.getElementById("avatar-badge");
+  let bubbledId = 0;
+  function showNotice(text) {
+    if (!chat.hidden || !cabinet.hidden) return;
+    hideBubble(); bubble = Koh.el("div", "av-bubble notice", text);
+    document.body.append(bubble);
+    const s = size(), bw = bubble.offsetWidth, bh = bubble.offsetHeight;
+    bubble.style.left = clamp(pos.x + s / 2 - bw / 2, MARGIN, innerWidth - bw - MARGIN) + "px";
+    bubble.style.top = (pos.y - bh - 10 >= MARGIN ? pos.y - bh - 10 : pos.y + s + 10) + "px";
+    bubble.addEventListener("click", () => { hideBubble(); show(chat, true); });
+    bubbleTimer = setTimeout(hideBubble, 12000);
+  }
+  Koh.statusHooks.push((d) => {
+    const n = d.notifications || {unread: 0, latest: null}, on = Koh.settings.app.notifications !== false;
+    const count = on ? n.unread : 0;
+    if (badge) { badge.hidden = !count; badge.textContent = count > 9 ? "9+" : String(count); }
+    avatar.classList.toggle("has-notice", count > 0);
+    if (!count || !n.latest || !Koh.loadedOnce) return;  // settings arrival re-syncs the widget and would drop the bubble
+    if (!chat.hidden) { if (Koh.hooks.notices) Koh.hooks.notices(); return; }  // chat already open: show the new card right away
+    if (n.latest.id > bubbledId) { bubbledId = n.latest.id; showNotice(n.latest.title); }
+  });
 
   // ---------- drag / click ----------
   let drag = null, longTimer = 0, suppress = false, dragFrame = 0;

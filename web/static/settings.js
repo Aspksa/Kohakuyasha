@@ -71,6 +71,12 @@
     look.append(row("Анимации", "Отключите, если интерфейс кажется тяжёлым", sw(a.animations, v => change({animations: v}))));
     nodes.push(look);
 
+    // ----- notifications -----
+    const notes = card("Уведомления", "Новости (например, вышло обновление) приходят на аватар; нажмите на него — откроется чат с подробностями и кнопками.");
+    notes.append(row("Значок и подсказка на аватаре", "Счётчик на аватаре и всплывающая подсказка", sw(a.notifications !== false, v => change({notifications: v}))));
+    notes.append(row("Уведомления Windows", "Всплывающее сообщение из значка в трее; работает, когда запущен launcher", sw(a.toast !== false, v => change({toast: v}))));
+    nodes.push(notes);
+
     // ----- startup -----
     const start = card("Запуск", "Поведение при включении компьютера и при запуске Kohakuyasha.");
     const auto = sw(false, () => {}), autoInput = auto.querySelector("input");

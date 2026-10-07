@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class Database:
@@ -109,6 +109,16 @@ class Database:
                     created_at TEXT NOT NULL,
                     role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
                     content TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    body TEXT NOT NULL DEFAULT '',
+                    actions_json TEXT NOT NULL DEFAULT '[]',
+                    dedupe_key TEXT UNIQUE,
+                    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'seen', 'done'))
                 );
                 CREATE TABLE IF NOT EXISTS dialogs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -428,6 +438,61 @@ class Database:
                 "SELECT id FROM facts ORDER BY pinned DESC, importance DESC, updated_at DESC LIMIT ?)",
                 (keep,),
             )
+
+    # ---------- notifications (shown on the avatar and as cards in the chat) ----------
+    def add_notification(self, kind: str, title: str, body: str = "", actions: list[dict[str, Any]] | None = None, dedupe_key: str | None = None) -> dict[str, Any] | None:
+        """Returns the new notification, or None when one with the same dedupe_key already exists (even a dismissed one)."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock, self.session() as conn:
+            if dedupe_key and conn.execute("SELECT 1 FROM notifications WHERE dedupe_key = ?", (dedupe_key,)).fetchone():
+                return None
+            cur = conn.execute(
+                "INSERT INTO notifications(created_at, kind, title, body, actions_json, dedupe_key) VALUES(?, ?, ?, ?, ?, ?)",
+                (now, kind, title[:200], body[:2000], json.dumps(actions or [], ensure_ascii=False), dedupe_key),
+            )
+            conn.execute("DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY id DESC LIMIT 100)")
+            nid = int(cur.lastrowid)
+        return self.get_notification(nid)
+
+    @staticmethod
+    def _notification_row(row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        try:
+            item["actions"] = json.loads(item.pop("actions_json") or "[]")
+        except ValueError:
+            item["actions"] = []
+        return item
+
+    def get_notification(self, nid: int) -> dict[str, Any] | None:
+        with self._lock, self.session() as conn:
+            row = conn.execute("SELECT id, created_at, kind, title, body, actions_json, status FROM notifications WHERE id = ?", (int(nid),)).fetchone()
+        return self._notification_row(row) if row else None
+
+    def list_notifications(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Active (not dismissed) notifications, oldest first."""
+        with self._lock, self.session() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at, kind, title, body, actions_json, status FROM notifications WHERE status != 'done' ORDER BY id DESC LIMIT ?",
+                (max(1, min(int(limit), 100)),),
+            ).fetchall()
+        return [self._notification_row(r) for r in reversed(rows)]
+
+    def unread_notifications(self) -> list[dict[str, Any]]:
+        with self._lock, self.session() as conn:
+            rows = conn.execute("SELECT id, created_at, kind, title, body, actions_json, status FROM notifications WHERE status = 'new' ORDER BY id").fetchall()
+        return [self._notification_row(r) for r in rows]
+
+    def mark_notifications_seen(self) -> int:
+        with self._lock, self.session() as conn:
+            return int(conn.execute("UPDATE notifications SET status = 'seen' WHERE status = 'new'").rowcount)
+
+    def resolve_notification(self, nid: int) -> bool:
+        with self._lock, self.session() as conn:
+            return conn.execute("UPDATE notifications SET status = 'done' WHERE id = ?", (int(nid),)).rowcount > 0
+
+    def resolve_notifications_by_prefix(self, prefix: str) -> int:
+        with self._lock, self.session() as conn:
+            return int(conn.execute("UPDATE notifications SET status = 'done' WHERE dedupe_key LIKE ? AND status != 'done'", (prefix + "%",)).rowcount)
 
     def chat_after(self, after_id: int, limit: int = 200) -> list[dict[str, Any]]:
         with self._lock, self.session() as conn:

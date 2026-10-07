@@ -30,6 +30,7 @@ class RuntimeState:
     last_test_summary: dict | None = None
     on_restart: Callable[[], None] | None = None
     on_shutdown: Callable[[], None] | None = None
+    toast: Callable[[str, str], None] | None = None  # (title, message): Windows tray notification, set by the launcher
     session_token: str = field(default_factory=lambda: secrets.token_urlsafe(32), repr=False)
 
     def __post_init__(self) -> None:

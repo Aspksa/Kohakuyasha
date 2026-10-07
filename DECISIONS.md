@@ -136,3 +136,9 @@ The project updates itself from the configured GitHub repository (default Aspksa
 **Status:** Active
 
 The launcher never gives up on a held single-instance lock immediately: it waits (up to 30 s) while the holder is not healthy, and exits as "already running" only when a serving, non-stopping instance exists (then it just opens the browser). This makes restart-after-update reliable regardless of how long the old process takes to exit. Diagnostics for failed starts live in `logs/launcher-crash.log` and `logs/relaunch.log`.
+
+## D-024 — Notifications are data, actions are fixed ids
+**Date:** 2026-10-07
+**Status:** Active
+
+Notifications live in SQLite (`notifications`, deduplicated by key) and are rendered by the UI: badge/bubble on the avatar, cards in the chat. Actions are a closed set of ids (`update_install`, `update_details`, `restart`, `dismiss`) mapped by the UI to existing authenticated API calls; a notification can never carry code or a URL to run. Nothing is installed without the user pressing the button. The tray toast is optional (`runtime.toast`, set by the launcher).

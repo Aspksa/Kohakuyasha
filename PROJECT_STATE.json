@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.8.2",
+  "current_version": "0.9.0",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "relaunch_fix_v0.8.2",
+  "completed_stage": "notifications_v0.9.0",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "98/98 passed",
+      "linux": "101/101 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.8.2"
+    "note": "Run on PR for v0.9.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -136,7 +136,13 @@
     "launcher_crash_log",
     "relaunch_log",
     "batch_files_crlf_on_update",
-    "update_page_waits_for_restart"
+    "update_page_waits_for_restart",
+    "notifications_store",
+    "avatar_badge_and_bubble",
+    "chat_notification_cards",
+    "update_announced_in_chat",
+    "tray_toast",
+    "background_update_watcher"
   ],
-  "next_action": "Merge v0.8.2 after green CI; on Windows start Kohakuyasha.bat manually once, then publish a later version and confirm Обновление → Обновить → Перезапустить сейчас returns to the UI by itself (logs/relaunch.log has the trace)."
+  "next_action": "Merge v0.9.0 after green CI, then start stage 2: «Диск Kohakuyasha» file storage module (backend with path-traversal-safe storage, streaming upload, trash; Disk page UI)."
 }

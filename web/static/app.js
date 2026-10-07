@@ -26,6 +26,7 @@
       $("#overall-state").textContent = d.services.core === "ONLINE" ? "ONLINE" : "ПРОВЕРКА";
       Koh.status = d;
       if (Koh.onStatus) Koh.onStatus(d);
+      Koh.statusHooks.forEach(fn => { try { fn(d); } catch (e) { console.error(e); } });
     } catch {
       $("#side-status").textContent = "Нет связи"; $("#side-action").textContent = "Ожидание ядра"; $("#overall-state").textContent = "OFFLINE";
     }

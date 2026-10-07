@@ -454,3 +454,51 @@ def test_static_files_use_revalidation_and_media_is_immutable(tmp_path: Path):
     assert client.get("/").headers["cache-control"] == "no-store"
     establish_session(client)
     assert client.get("/api/settings").headers["cache-control"] == "no-store"
+
+
+def test_notifications_update_card_toast_and_actions(monkeypatch, tmp_path: Path):
+    from core import updater
+    client, db, runtime = make_client(tmp_path)
+    toasts = []
+    runtime.toast = lambda title, message: toasts.append((title, message))
+    establish_session(client)
+    assert client.get("/api/status").json()["notifications"] == {"unread": 0, "latest": None}
+
+    monkeypatch.setattr(updater, "fetch_text", lambda repo, branch, path, token, limit=0: "9.9.9\n" if path == "VERSION" else json.dumps({"version": "9.9.9", "summary": "Новое"}) + "\n")
+    monkeypatch.setattr(updater, "fetch_commit", lambda *a: {"sha": "abc1234", "date": ""})
+    monkeypatch.setattr(updater, "fetch_zip", lambda *a: update_zip())
+    client.post("/api/update/check", headers=ACTION)
+    client.post("/api/update/check", headers=ACTION)  # the same release is announced only once
+    st = client.get("/api/status").json()["notifications"]
+    assert st["unread"] == 1 and st["latest"]["kind"] == "update" and "9.9.9" in st["latest"]["title"]
+    assert len(toasts) == 1 and "9.9.9" in toasts[0][0]
+    cards = client.get("/api/notifications").json()["notifications"]
+    assert [a["id"] for a in cards[0]["actions"]] == ["update_install", "update_details", "dismiss"]
+
+    assert client.post("/api/notifications/seen").status_code == 403  # needs the same-origin marker
+    assert client.post("/api/notifications/seen", headers=ACTION).json()["seen"] == 1
+    assert client.get("/api/status").json()["notifications"]["unread"] == 0 and len(client.get("/api/notifications").json()["notifications"]) == 1
+
+    client.post("/api/update/install", headers=ACTION)  # installing replaces the card with a "restart" card
+    cards = client.get("/api/notifications").json()["notifications"]
+    assert [c["kind"] for c in cards] == ["restart"] and "9.9.9" in cards[0]["title"]
+    assert client.post(f"/api/notifications/{cards[0]['id']}/resolve", headers=ACTION).status_code == 200
+    assert client.get("/api/notifications").json()["notifications"] == []
+    assert client.post("/api/notifications/999/resolve", headers=ACTION).status_code == 404
+
+
+def test_toast_can_be_disabled_and_dismissed_release_is_not_repeated(monkeypatch, tmp_path: Path):
+    from core import updater
+    client, db, runtime = make_client(tmp_path)
+    toasts = []
+    runtime.toast = lambda title, message: toasts.append(title)
+    establish_session(client)
+    client.put("/api/settings/app", headers=ACTION, json={"toast": False})
+    monkeypatch.setattr(updater, "fetch_text", lambda repo, branch, path, token, limit=0: "9.9.9\n" if path == "VERSION" else "")
+    monkeypatch.setattr(updater, "fetch_commit", lambda *a: {"sha": "", "date": ""})
+    client.post("/api/update/check", headers=ACTION)
+    assert toasts == [] and client.get("/api/status").json()["notifications"]["unread"] == 1
+    nid = client.get("/api/notifications").json()["notifications"][0]["id"]
+    client.post(f"/api/notifications/{nid}/resolve", headers=ACTION)
+    client.post("/api/update/check", headers=ACTION)
+    assert client.get("/api/notifications").json()["notifications"] == []  # "later" means: do not nag about the same version

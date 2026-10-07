@@ -57,7 +57,7 @@
   <div id="toast" class="toast"></div>
 
   <div id="avatar" class="avatar shape-soft glow" role="button" tabindex="0" aria-label="Kohakuyasha: нажмите — чат, правая кнопка — личный кабинет, перетаскивайте куда угодно" title="ЛКМ — чат · ПКМ — личный кабинет · перетащите, чтобы переместить">
-    <img id="avatar-img" src="/static/avatar-small.png" alt="" draggable="false"><span class="avatar-dot"></span>
+    <img id="avatar-img" src="/static/avatar-small.png" alt="" draggable="false"><span class="avatar-dot"></span><span class="av-badge" id="avatar-badge" hidden></span>
   </div>
 
   <section id="chat-panel" class="float-panel chat" hidden aria-label="Чат">
@@ -73,6 +73,7 @@
     </header>
     <div class="chat-scroll" id="chat-scroll"><div id="chat-log" class="chat-log" aria-live="polite"></div></div>
     <button id="chat-down" class="chat-down" hidden aria-label="Вниз">↓</button>
+    <div id="chat-notices" class="notices" aria-live="polite"></div>
     <form id="chat-form" class="composer" autocomplete="off">
       <div class="composer-box">
         <textarea id="chat-input" rows="1" maxlength="4000" placeholder="Сообщение для Kohakuyasha…" aria-label="Сообщение"></textarea>

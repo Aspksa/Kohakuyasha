@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 16,
+  "next_id": 19,
   "tasks": [
     {
       "id": "task-001",
@@ -173,6 +173,34 @@
         "task-013"
       ],
       "result": "See CHANGELOG change-0014."
+    },
+    {
+      "id": "task-016",
+      "title": "v0.9.0: notifications on the avatar with chat cards and tray toast",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-015"
+      ],
+      "result": "See CHANGELOG change-0017."
+    },
+    {
+      "id": "task-017",
+      "title": "Stage 2: Диск Kohakuyasha file storage module",
+      "priority": 90,
+      "status": "queued",
+      "depends_on": [
+        "task-016"
+      ]
+    },
+    {
+      "id": "task-018",
+      "title": "Stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments",
+      "priority": 80,
+      "status": "queued",
+      "depends_on": [
+        "task-017"
+      ]
     }
   ]
 }
