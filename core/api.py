@@ -396,7 +396,13 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         ready = settings.provider != "none" and secrets.has_key()
         history = await asyncio.to_thread(brain.history_window, db, mem)
         memory_query = brain.contextual_query(text, history)
-        snippets = await asyncio.to_thread(db.search_memory, memory_query, mem.max_snippets) if mem.enabled and ready else []
+        if mem.enabled and ready:
+            semantic_query = brain.semantic_expand_query(memory_query)
+            candidate_limit = min(20, max(mem.max_snippets * 3, mem.max_snippets))
+            candidates = await asyncio.to_thread(db.search_memory, semantic_query, candidate_limit)
+            snippets = brain.rank_memory_snippets(candidates, memory_query, mem.max_snippets)
+        else:
+            snippets = []
         blocks, used_facts = (await asyncio.to_thread(brain.build_context, db, mem, text, None, history)) if ready else ([], [])
         character_data = await asyncio.to_thread(load_character)
         rid = payload.get("request_id") if isinstance(payload.get("request_id"), str) else ""

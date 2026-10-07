@@ -44,6 +44,103 @@ def similarity(a: str, b: str) -> float:
     return max(inter / len(ta | tb), containment * 0.9)
 
 
+SEMANTIC_CONCEPTS = {
+    "pet": ("кошка", "кот", "котёнок", "котенок", "собака", "пёс", "пес", "питомец", "животное", "cat", "dog", "pet"),
+    "family": ("семья", "мама", "папа", "муж", "жена", "сын", "дочь", "брат", "сестра", "родственник", "family", "mother", "father", "wife", "husband"),
+    "work": ("работа", "работает", "должность", "профессия", "карьера", "компания", "job", "work", "career", "company"),
+    "home": ("живёт", "живет", "город", "дом", "переехал", "переехала", "место жительства", "location", "city", "home", "live"),
+    "preference": ("любит", "нравится", "предпочитает", "любимый", "любимая", "вкус", "like", "prefer", "favorite"),
+    "project": ("проект", "репозиторий", "код", "приложение", "система", "project", "repository", "code", "app"),
+    "schedule": ("встреча", "срок", "дедлайн", "запланировано", "расписание", "meeting", "deadline", "schedule"),
+}
+
+SEMANTIC_EXPANSIONS = {
+    "pet": ("кошка", "кот", "собака", "питомец"),
+    "family": ("семья", "мама", "папа", "муж", "жена", "сын", "дочь"),
+    "work": ("работа", "должность", "профессия", "карьера"),
+    "home": ("живёт", "город", "дом", "переехал"),
+    "preference": ("любит", "нравится", "предпочитает", "любимый"),
+    "project": ("проект", "репозиторий", "код", "приложение"),
+    "schedule": ("встреча", "срок", "дедлайн", "расписание"),
+}
+
+
+def _concept_match(text: str, markers: tuple[str, ...]) -> bool:
+    raw = (text or "").lower()
+    words = [w.lower() for w in WORD_RE.findall(raw)]
+    stems4 = {w[:4] for w in words if len(w) >= 4}
+    for marker in markers:
+        m = marker.lower()
+        if m in raw:
+            return True
+        marker_words = [w.lower() for w in WORD_RE.findall(m)]
+        if marker_words and all(
+            (mw in words) or (len(mw) >= 4 and mw[:4] in stems4)
+            for mw in marker_words
+        ):
+            return True
+    return False
+
+
+def semantic_tokens(text: str) -> set[str]:
+    """Lexical stems plus coarse meaning tags; deterministic and dependency-free."""
+    raw = (text or "").lower()
+    out = set(tokens(raw))
+    for concept, markers in SEMANTIC_CONCEPTS.items():
+        if _concept_match(raw, markers):
+            out.add("#" + concept)
+    return out
+
+
+def semantic_similarity(a: str, b: str) -> float:
+    ta, tb = semantic_tokens(a), semantic_tokens(b)
+    if not ta or not tb:
+        return 0.0
+    inter = ta & tb
+    concept_hits = sum(1 for t in inter if t.startswith("#"))
+    lexical_hits = len(inter) - concept_hits
+    weighted = lexical_hits + concept_hits * 2.5
+    denom = max(1.0, min(len(ta), len(tb)))
+    return min(1.0, weighted / denom)
+
+
+def semantic_expand_query(query: str, limit_chars: int = 1200) -> str:
+    """Expand a query with a few concept synonyms so FTS can retrieve meaning-adjacent candidates."""
+    raw = (query or "").strip()
+    if not raw:
+        return ""
+    lowered = raw.lower()
+    extras: list[str] = []
+    for concept, markers in SEMANTIC_CONCEPTS.items():
+        if _concept_match(lowered, markers):
+            extras.extend(SEMANTIC_EXPANSIONS[concept])
+    seen = set()
+    ordered = []
+    for item in extras:
+        key = item.lower()
+        if key not in seen and key not in lowered:
+            seen.add(key)
+            ordered.append(item)
+    return (raw + (" " + " ".join(ordered) if ordered else ""))[:limit_chars]
+
+
+def rank_memory_snippets(snippets: list[dict[str, Any]], query: str, limit: int = 6) -> list[dict[str, Any]]:
+    """Hybrid local rerank after broad FTS candidate retrieval."""
+    limit = max(1, min(int(limit), 20))
+    scored = []
+    for index, item in enumerate(snippets):
+        content = str(item.get("content", ""))
+        title = str(item.get("title", ""))
+        lexical = similarity(query, content)
+        semantic = semantic_similarity(query, content)
+        title_score = semantic_similarity(query, title) * 0.2 if title else 0.0
+        recency_tiebreak = max(0.0, 1.0 - index / max(1, len(snippets))) * 0.01
+        score = lexical * 0.55 + semantic * 0.4 + title_score + recency_tiebreak
+        scored.append((score, index, item))
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return [item for _, _, item in scored[:limit]]
+
+
 def explicit_remember(text: str) -> str | None:
     """'Запомни: я живу в Казани' -> 'я живу в Казани'. None when the message is not such a command."""
     m = REMEMBER_RE.match(text or "")
@@ -207,7 +304,10 @@ def contextual_query(query: str, history: list[dict[str, Any]] | None = None, li
     parts = [current] if current else []
     lowered = current.lower()
     followup_markers = ("а ", "и ", "но ", "она", "он ", "они", "это", "там", "тот ", "та ", "те ", "ещё", "теперь", "продолж")
-    likely_followup = len(tokens(current)) <= 7 or any(lowered.startswith(marker) for marker in followup_markers)
+    referential_words = ("её", "его", "их", "этот", "эта", "эти", "такой", "такая", "там", "тут", "снова")
+    likely_followup = any(lowered.startswith(marker) for marker in followup_markers) or any(
+        re.search(rf"\\b{re.escape(word)}\\b", lowered) for word in referential_words
+    )
     if not likely_followup:
         return current[:limit_chars]
     for item in reversed(history or []):
@@ -234,7 +334,7 @@ def select_facts(facts: list[dict[str, Any]], query: str, limit: int = 12, now: 
         ft = tokens(text)
         overlap = len(q & ft)
         coverage = overlap / max(1, len(q)) if q else 0.0
-        related = similarity(query, text) if q else 0.0
+        related = max(similarity(query, text), semantic_similarity(query, text)) if q else 0.0
         try:
             days = max(0.0, (now - datetime.fromisoformat(f["updated_at"])).total_seconds() / 86400)
         except (ValueError, KeyError, TypeError):
