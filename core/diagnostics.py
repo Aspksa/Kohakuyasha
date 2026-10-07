@@ -85,11 +85,14 @@ class Diagnostics:
             return f"{self.host}:{self.port} отвечает"
 
     def _internet(self) -> str:
-        req = urllib.request.Request("https://www.python.org/", headers={"User-Agent": "Kohakuyasha/0.1"})
-        with urllib.request.urlopen(req, timeout=4) as response:
-            if response.status >= 400:
-                raise RuntimeError(f"HTTP {response.status}")
-            response.read(1)
+        req = urllib.request.Request("https://www.python.org/", headers={"User-Agent": "Kohakuyasha"})
+        try:
+            with urllib.request.urlopen(req, timeout=4) as response:
+                if response.status >= 400:
+                    return f"python.org ответил HTTP {response.status} (не критично)"
+                response.read(1)
+        except OSError as exc:
+            return f"Нет доступа к сети (не критично): {exc}"
         return "python.org доступен"
 
     def _disk(self) -> str:

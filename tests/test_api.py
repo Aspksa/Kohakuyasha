@@ -89,3 +89,33 @@ def test_websocket_requires_same_origin(tmp_path: Path):
             pass
     with client.websocket_connect("/ws/events", headers={**base_headers, "Origin": ORIGIN}) as ws:
         assert ws is not None
+
+
+def test_failed_diagnostics_restores_status_and_reports_error(monkeypatch, tmp_path: Path):
+    client, _, runtime = make_client(tmp_path)
+    establish_session(client)
+
+    def boom(self, mode):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("core.api.Diagnostics.run", boom)
+    r = client.post("/api/tests/run?mode=quick", headers=ACTION)
+    assert r.status_code == 500
+    assert runtime.status == "Наблюдает"
+
+
+def test_websocket_without_origin_is_rejected(tmp_path: Path):
+    client, _, _ = make_client(tmp_path)
+    establish_session(client)
+    cookie = client.cookies.get("kohakuyasha_session")
+    headers = {"Host": "127.0.0.1:8710", "Cookie": f"kohakuyasha_session={cookie}"}
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws/events", headers=headers):
+            pass
+
+
+def test_websocket_without_session_is_rejected(tmp_path: Path):
+    client, _, _ = make_client(tmp_path)
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws/events", headers={"Host": "127.0.0.1:8710", "Origin": ORIGIN}):
+            pass

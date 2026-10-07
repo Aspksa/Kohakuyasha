@@ -9,6 +9,9 @@ import time
 import webbrowser
 from pathlib import Path
 
+# Embedded Python (._pth) runs isolated and does not put the script directory on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import psutil
 import uvicorn
 
@@ -71,7 +74,10 @@ class Supervisor:
         self.safe_mode = safe_mode
         self.paths = Paths(ROOT)
         self.paths.ensure()
-        ensure_instance_marker(ROOT)
+        try:
+            ensure_instance_marker(ROOT)
+        except OSError:
+            pass  # read-only media: only autostart needs the marker, and it reports its own error
         self.config_store = ConfigStore(self.paths)
         self.settings = self.config_store.load()
         self.logger = setup_logging(self.paths.logs, self.settings.log_max_bytes, self.settings.log_backups)
@@ -112,23 +118,31 @@ class Supervisor:
         )
         return uvicorn.Server(cfg)
 
-    def start_server(self) -> None:
-        self.server = self._build_server()
-        self.server_thread = threading.Thread(target=self.server.run, name="kohakuyasha-web", daemon=True)
-        self.server_thread.start()
-        deadline = time.time() + 15
-        while time.time() < deadline:
-            if self.server.started:
+    def start_server(self, attempts: int = 3) -> None:
+        for attempt in range(attempts):
+            self.server = self._build_server()
+            self.server_thread = threading.Thread(target=self.server.run, name="kohakuyasha-web", daemon=True)
+            self.server_thread.start()
+            deadline = time.time() + 15
+            while time.time() < deadline:
+                if self.server.started:
+                    self.runtime.port = self.port
+                    self.runtime.set_status("Наблюдает", "Готова к работе")
+                    if self.tray:
+                        self.tray.set_url(self.url)
+                    self.events.emit("Ядро и веб-интерфейс запущены", event_type="startup", payload={"url": self.url, "version": VERSION})
+                    self._watchdog_failures = 0
+                    return
+                if not self.server_thread.is_alive():
+                    break
+                time.sleep(0.1)
+            # The port can be taken between the free-port probe and the bind: pick another and retry.
+            if self.server_thread.is_alive():
+                self.server.should_exit = True
+                self.server_thread.join(timeout=5)
+            if attempt + 1 < attempts:
+                self.port = find_free_port(self.settings.host, self.port + 1)
                 self.runtime.port = self.port
-                self.runtime.set_status("Наблюдает", "Готова к работе")
-                if self.tray:
-                    self.tray.set_url(self.url)
-                self.events.emit("Ядро и веб-интерфейс запущены", event_type="startup", payload={"url": self.url, "version": VERSION})
-                self._watchdog_failures = 0
-                return
-            if not self.server_thread.is_alive():
-                break
-            time.sleep(0.1)
         raise RuntimeError("Веб-сервер не запустился.")
 
     def restart(self) -> bool:
@@ -142,7 +156,11 @@ class Supervisor:
                 self.server_thread.join(timeout=8)
                 if self.server_thread.is_alive():
                     raise RuntimeError("Старый веб-сервер не завершился за 8 секунд.")
-            self.port = find_free_port(self.settings.host, self.settings.port)
+            # Keep the same port when possible so open browser tabs stay valid.
+            try:
+                self.port = find_free_port(self.settings.host, self.port, span=1)
+            except RuntimeError:
+                self.port = find_free_port(self.settings.host, self.settings.port)
             self.runtime.port = self.port
             self.start_server()
             return True

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 5,
+  "next_id": 6,
   "tasks": [
     {
       "id": "task-001",
@@ -12,11 +12,11 @@
     },
     {
       "id": "task-002",
-      "title": "Validate Kohakuyasha v0.1.2 on physical Windows",
+      "title": "Validate Kohakuyasha v0.1.3 on physical Windows",
       "priority": 100,
       "status": "queued",
       "depends_on": [
-        "task-004"
+        "task-005"
       ],
       "acceptance": [
         "Kohakuyasha.bat launches from a removable drive",
@@ -49,6 +49,16 @@
         "task-003"
       ],
       "result": "Added GitHub Actions validation on Windows and Linux with pinned Python 3.13.16; CI exposed and fixed Windows SQLite handle locking and PowerShell 5.1 UTF-8 BOM compatibility. Final run passed on both platforms."
+    },
+    {
+      "id": "task-005",
+      "title": "Audit fixes v0.1.3",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-004"
+      ],
+      "result": "Fixed diagnostics status leak/concurrency, deferred restart/shutdown replies, event trim cost, restart port drift, bind race retry, soft internet check, read-only marker crash; tests 17 -> 27."
     }
   ]
 }

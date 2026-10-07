@@ -32,3 +32,15 @@ def test_port_is_open():
         assert port_is_open("127.0.0.1", sock.getsockname()[1])
     finally:
         sock.close()
+
+
+def test_find_free_port_single_span_fails_when_taken():
+    import pytest
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen(1)
+    try:
+        with pytest.raises(RuntimeError):
+            find_free_port("127.0.0.1", sock.getsockname()[1], span=1)
+    finally:
+        sock.close()

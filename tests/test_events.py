@@ -22,3 +22,15 @@ def test_event_limit_is_enforced_after_emit(tmp_path: Path):
     hub = EventHub(db, logging.getLogger("events-limit-test"), limit=100)
     hub.emit("trigger-trim")
     assert len(db.recent_events(1000)) == 100
+
+
+def test_trim_runs_periodically_not_on_every_emit(tmp_path: Path):
+    db = Database(tmp_path / "events.db")
+    db.initialize()
+    calls = []
+    original = db.trim_events
+    db.trim_events = lambda keep: (calls.append(keep), original(keep))[1]
+    hub = EventHub(db, logging.getLogger("events-cadence"), limit=100)
+    for _ in range(hub.TRIM_EVERY + 2):
+        hub.emit("x")
+    assert len(calls) == 2
