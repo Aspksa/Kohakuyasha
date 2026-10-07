@@ -95,6 +95,33 @@ def test_brain_v4_planner_continuity_and_stale_fact_replacement(db: Database):
     assert len(facts) == 1 and facts[0]["text"] == "Не любит кофе" and facts[0]["importance"] == 4
 
 
+def test_brain_v5_semantic_hybrid_retrieval_and_clean_short_topics():
+    history = [
+        {"role": "user", "content": "У меня есть кошка Мурка"},
+        {"role": "assistant", "content": "Запомнила"},
+    ]
+    assert brain.contextual_query("погода завтра", history) == "погода завтра"
+    expanded = brain.semantic_expand_query("как зовут моего питомца?")
+    assert "кошка" in expanded and "собака" in expanded
+
+    snippets = [
+        {"role": "user", "content": "Работаю разработчиком", "title": "карьера"},
+        {"role": "user", "content": "Мою кошку зовут Мурка", "title": "старый чат"},
+        {"role": "user", "content": "Люблю зелёный чай", "title": "предпочтения"},
+    ]
+    ranked = brain.rank_memory_snippets(snippets, "как зовут моего питомца?", 2)
+    assert ranked[0]["content"] == "Мою кошку зовут Мурка"
+
+    facts = [
+        {"id": 1, "text": "Мою кошку зовут Мурка", "category": "relation", "importance": 3,
+         "pinned": False, "updated_at": datetime.now().astimezone().isoformat()},
+        {"id": 2, "text": "Работает программистом", "category": "project", "importance": 5,
+         "pinned": False, "updated_at": datetime.now().astimezone().isoformat()},
+    ]
+    chosen = brain.select_facts(facts, "что известно о моём питомце?", limit=1)
+    assert chosen[0]["id"] == 1
+
+
 def test_parse_facts_json_is_tolerant():
     good = '{"facts":[{"text":"Любит чай","category":"preference","importance":4},{"text":"x"},{"text":"Живёт в Казани","category":"zzz","importance":99}]}'
     out = brain.parse_facts_json(good)
