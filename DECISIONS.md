@@ -167,3 +167,9 @@ Each turn gets a compact working-memory block containing the current user goal a
 
 Deep turns receive a local planning and epistemic-confidence policy inside the prompt, so simple turns stay fast and no extra planning API request is added. Short continuation commands include the latest assistant task state in working memory so multi-turn work resumes instead of restarting. When a new automatically extracted fact contradicts an older unpinned automatic fact with the same semantic core, the newer user information replaces the stale fact; pinned or manual facts are never silently overwritten.
 
+## D-029 — Hybrid memory stays dependency-free before true embeddings
+**Date:** 2026-10-07
+**Status:** Active
+
+Before introducing a heavyweight embedding runtime, Kohakuyasha uses a portable hybrid retrieval layer: local semantic concept tags expand meaning-adjacent queries, SQLite FTS retrieves a broader candidate set, and the brain reranks candidates using lexical plus concept similarity. The same semantic score participates in long-term fact ranking. This improves recall across paraphrases while keeping the Windows runtime small and offline-friendly. True vector embeddings remain a separate later stage and must justify their binary size, startup cost and portability impact.
+
