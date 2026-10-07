@@ -96,7 +96,7 @@ PLANNER_DEEP = (
 
 def is_continuation(query: str) -> bool:
     text = (query or "").strip().lower()
-    return bool(text) and (len(tokens(text)) <= 4 or any(marker in text for marker in CONTINUATION_MARKERS))
+    return bool(text) and any(marker in text for marker in CONTINUATION_MARKERS)
 
 
 def working_memory_block(query: str, history: list[dict[str, Any]] | None = None, limit_chars: int = 1800) -> str:
