@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+import secrets as pysecrets
 import threading
 from dataclasses import asdict
 from typing import Any
@@ -10,7 +12,7 @@ from fastapi import Body, FastAPI, Header, Request, WebSocket, WebSocketDisconne
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, assistant, autostart
+from . import ai, assistant, autostart, media, memory, prefs
 from .config import ConfigStore, Paths
 from .database import Database
 from .diagnostics import Diagnostics
@@ -35,8 +37,47 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     def ai_settings() -> ai.AISettings:
         return ai.validate_ai(db.get_setting("ai"))
 
-    def avatar_settings() -> ai.AvatarSettings:
-        return ai.validate_avatar(db.get_setting("avatar"))
+    def avatar_settings() -> prefs.AvatarSettings:
+        return prefs.validate_avatar(db.get_setting("avatar"))
+
+    def app_settings() -> prefs.AppSettings:
+        return prefs.validate_app(db.get_setting("app"))
+
+    def memory_settings() -> prefs.MemorySettings:
+        return prefs.validate_memory(db.get_setting("memory"))
+
+    store = media.MediaStore(paths.media)
+    MAX_FACES = 12
+    MAX_BODY = 9_000_000
+
+    def faces_list() -> list[dict]:
+        raw = db.get_setting("faces", [])
+        return [f for f in raw if isinstance(f, dict) and prefs.FACE_ID_RE.match(str(f.get("id", "")))] if isinstance(raw, list) else []
+
+    def face_public(f: dict) -> dict:
+        return {
+            "id": f["id"], "name": f.get("name", "Лицо"), "builtin": False,
+            "url": f"/media/{f['file']}", "small": f"/media/{f['file']}", "full": f"/media/{f['orig']}",
+            "zoom": f.get("zoom", 1.0), "x": f.get("x", 0.0), "y": f.get("y", 0.0), "w": f.get("w", 1), "h": f.get("h", 1),
+        }
+
+    def all_faces() -> list[dict]:
+        default = {
+            "id": "default", "name": "Kohakuyasha", "builtin": True, "url": "/static/avatar.png",
+            "small": "/static/avatar-small.png", "full": "/static/avatar-full.jpg", "zoom": 1.0, "x": 0.0, "y": 0.0, "w": 1, "h": 1,
+        }
+        return [default] + [face_public(f) for f in faces_list()]
+
+    def all_settings() -> dict:
+        avatar = avatar_settings()
+        if avatar.active_face != "default" and not any(f["id"] == avatar.active_face for f in faces_list()):
+            avatar.active_face = "default"
+        app_cfg = asdict(app_settings())
+        app_cfg["open_browser"] = config.load().open_browser
+        return {
+            "avatar": asdict(avatar), "faces": all_faces(), "ai": ai.public_ai(ai_settings(), secrets),
+            "app": app_cfg, "memory": asdict(memory_settings()),
+        }
 
     def security_headers(response: Response) -> Response:
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -60,6 +101,12 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
             return security_headers(JSONResponse({"detail": "Недопустимый Origin."}, status_code=403))
 
         if request.url.path.startswith("/api/"):
+            try:
+                too_big = int(request.headers.get("content-length") or 0) > MAX_BODY
+            except ValueError:
+                too_big = True
+            if too_big:
+                return security_headers(JSONResponse({"detail": "Запрос слишком большой."}, status_code=413))
             token = request.cookies.get(SESSION_COOKIE)
             if not session_matches(token, runtime.session_token):
                 return security_headers(JSONResponse({"detail": "Требуется локальная сессия."}, status_code=401))
@@ -115,16 +162,157 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
 
     @app.get("/api/settings")
     async def get_settings():
-        def build() -> dict:
-            return {"avatar": asdict(avatar_settings()), "ai": ai.public_ai(ai_settings(), secrets)}
-
-        return await asyncio.to_thread(build)
+        return await asyncio.to_thread(all_settings)
 
     @app.put("/api/settings/avatar")
     async def put_avatar(payload: dict[str, Any] = Body(...)):
-        settings = ai.validate_avatar(payload)
+        settings = prefs.validate_avatar(payload)
+        if settings.active_face != "default" and not any(f["id"] == settings.active_face for f in faces_list()):
+            settings.active_face = "default"
         await asyncio.to_thread(db.set_setting, "avatar", asdict(settings))
         return asdict(settings)
+
+    @app.put("/api/settings/app")
+    async def put_app(payload: dict[str, Any] = Body(...)):
+        current = app_settings()
+        merged = {**asdict(current), **{k: v for k, v in payload.items() if k in asdict(current)}}
+        merged["bg_image"] = current.bg_image  # the file is managed only via /api/background
+        settings = prefs.validate_app(merged)
+        if settings.background == "image" and not store.path(settings.bg_image):
+            settings.background = "glow"
+        await asyncio.to_thread(db.set_setting, "app", asdict(settings))
+        if isinstance(payload.get("open_browser"), bool):
+            await asyncio.to_thread(config.update, open_browser=payload["open_browser"])
+        return await asyncio.to_thread(all_settings)
+
+    @app.put("/api/settings/memory")
+    async def put_memory(payload: dict[str, Any] = Body(...)):
+        settings = prefs.validate_memory(payload)
+        await asyncio.to_thread(db.set_setting, "memory", asdict(settings))
+        return asdict(settings)
+
+    # ---------- media: faces and background ----------
+    @app.get("/media/{name}")
+    async def serve_media(name: str):
+        path = store.path(name)
+        if not path:
+            return JSONResponse({"detail": "Не найдено."}, status_code=404)
+        return FileResponse(path)
+
+    def rev_of(zoom: float, x: float, y: float) -> str:
+        return media.short_hash(f"{zoom:.3f}|{x:.3f}|{y:.3f}".encode(), 6)
+
+    def clamp_params(payload: dict) -> tuple[float, float, float]:
+        def num(key: str, default: float, lo: float, hi: float) -> float:
+            v = payload.get(key, default)
+            return min(max(float(v), lo), hi) if isinstance(v, (int, float)) and not isinstance(v, bool) else default
+        return num("zoom", 1.0, 1.0, 4.0), num("x", 0.0, -1.0, 1.0), num("y", 0.0, -1.0, 1.0)
+
+    def create_face(payload: dict) -> dict:
+        faces = faces_list()
+        if len(faces) >= MAX_FACES:
+            raise media.MediaError(f"Можно хранить не больше {MAX_FACES} лиц.")
+        raw = media.decode_upload(payload.get("data"))
+        img = media.open_image(raw)
+        orig_bytes, ext = media.encode(img, 1280, quality=92)
+        fid = pysecrets.token_hex(4)
+        orig = store.save(f"face-{fid}-orig-{media.short_hash(orig_bytes, 8)}.{ext}", orig_bytes)
+        loaded = media.open_image(orig_bytes)
+        w, h = loaded.size
+        y0 = -0.35 if h > w else 0.0
+        file = f"face-{fid}-{rev_of(1.0, 0.0, y0)}.png"
+        store.save(file, media.render_face(loaded, 1.0, 0.0, y0))
+        name = str(payload.get("name") or "Моё лицо").strip()[:60] or "Моё лицо"
+        face = {"id": fid, "name": name, "orig": orig, "file": file, "zoom": 1.0, "x": 0.0, "y": y0, "w": w, "h": h}
+        db.set_setting("faces", faces + [face])
+        return face
+
+    def update_face(fid: str, payload: dict) -> dict | None:
+        faces = faces_list()
+        face = next((f for f in faces if f["id"] == fid), None)
+        if not face:
+            return None
+        zoom, x, y = clamp_params(payload)
+        loaded = media.open_image(store.read(face["orig"]) or b"")
+        old = face["file"]
+        face.update(zoom=zoom, x=x, y=y, file=f"face-{fid}-{rev_of(zoom, x, y)}.png")
+        store.save(face["file"], media.render_face(loaded, zoom, x, y))
+        if old != face["file"]:
+            store.delete(old)
+        if isinstance(payload.get("name"), str) and payload["name"].strip():
+            face["name"] = payload["name"].strip()[:60]
+        db.set_setting("faces", faces)
+        return face
+
+    def remove_face(fid: str) -> bool:
+        faces = faces_list()
+        face = next((f for f in faces if f["id"] == fid), None)
+        if not face:
+            return False
+        store.delete(face["file"])
+        store.delete(face["orig"])
+        db.set_setting("faces", [f for f in faces if f["id"] != fid])
+        avatar = avatar_settings()
+        if avatar.active_face == fid:
+            avatar.active_face = "default"
+            db.set_setting("avatar", asdict(avatar))
+        return True
+
+    @app.post("/api/avatar/faces")
+    async def add_face(payload: dict[str, Any] = Body(...)):
+        try:
+            face = await asyncio.to_thread(create_face, payload)
+        except media.MediaError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        events.emit("Добавлено новое лицо аватара", event_type="settings")
+        return {"id": face["id"], "settings": await asyncio.to_thread(all_settings)}
+
+    @app.put("/api/avatar/faces/{fid}")
+    async def edit_face(fid: str, payload: dict[str, Any] = Body(...)):
+        if not prefs.FACE_ID_RE.match(fid) or fid == "default":
+            return JSONResponse({"detail": "Это лицо нельзя изменить."}, status_code=400)
+        try:
+            face = await asyncio.to_thread(update_face, fid, payload)
+        except media.MediaError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        if face is None:
+            return JSONResponse({"detail": "Лицо не найдено."}, status_code=404)
+        return await asyncio.to_thread(all_settings)
+
+    @app.delete("/api/avatar/faces/{fid}")
+    async def delete_face(fid: str):
+        if not prefs.FACE_ID_RE.match(fid) or fid == "default" or not await asyncio.to_thread(remove_face, fid):
+            return JSONResponse({"detail": "Лицо не найдено."}, status_code=404)
+        return await asyncio.to_thread(all_settings)
+
+    def set_background(payload: dict) -> None:
+        raw = media.decode_upload(payload.get("data"))
+        img = media.open_image(raw)
+        data, _ = media.encode(img, 1920, force_jpeg=True, quality=85)
+        name = store.save(f"bg-{media.short_hash(data)}.jpg", data)
+        current = app_settings()
+        if current.bg_image and current.bg_image != name:
+            store.delete(current.bg_image)
+        current.bg_image, current.background = name, "image"
+        db.set_setting("app", asdict(current))
+
+    @app.post("/api/background")
+    async def upload_background(payload: dict[str, Any] = Body(...)):
+        try:
+            await asyncio.to_thread(set_background, payload)
+        except media.MediaError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        return await asyncio.to_thread(all_settings)
+
+    @app.delete("/api/background")
+    async def delete_background():
+        def run() -> None:
+            current = app_settings()
+            store.delete(current.bg_image)
+            current.bg_image, current.background = "", "glow"
+            db.set_setting("app", asdict(current))
+        await asyncio.to_thread(run)
+        return await asyncio.to_thread(all_settings)
 
     @app.put("/api/settings/ai")
     async def put_ai(payload: dict[str, Any] = Body(...)):
@@ -184,15 +372,97 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
             return JSONResponse({"detail": "Сообщение длиннее 4000 символов."}, status_code=413)
         user_message = await asyncio.to_thread(db.add_chat_message, "user", text)
         settings = await asyncio.to_thread(ai_settings)
+        mem = await asyncio.to_thread(memory_settings)
         history = await asyncio.to_thread(db.recent_chat, 60)
+        snippets = await asyncio.to_thread(db.search_memory, text, mem.max_snippets) if mem.enabled and settings.provider != "none" else []
         try:
             answer = await asyncio.to_thread(
-                assistant.reply, settings, secrets.get_key(), await asyncio.to_thread(load_character), history
+                assistant.reply, settings, secrets.get_key(), await asyncio.to_thread(load_character), history, snippets
             )
         except ai.AIError as exc:
             return {"messages": [user_message], "error": str(exc)}
         assistant_message = await asyncio.to_thread(db.add_chat_message, "assistant", answer)
+        if mem.learn_chat and settings.provider != "none":
+            await asyncio.to_thread(db.add_learned, "user", text)
+            await asyncio.to_thread(db.add_learned, "assistant", answer)
         return {"messages": [user_message, assistant_message]}
+
+    @app.get("/api/chat/export")
+    async def chat_export():
+        messages = await asyncio.to_thread(db.recent_chat, 500)
+        return Response(
+            content=json.dumps({"project": "Kohakuyasha", "messages": messages}, ensure_ascii=False, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=kohakuyasha-chat.json"},
+        )
+
+    # ---------- memory ----------
+    @app.get("/api/memory")
+    async def get_memory():
+        def build() -> dict:
+            return {"settings": asdict(memory_settings()), "stats": db.memory_stats(), "dialogs": db.list_dialogs()}
+        return await asyncio.to_thread(build)
+
+    @app.post("/api/memory/import")
+    async def import_memory(payload: dict[str, Any] = Body(...)):
+        text, filename = payload.get("text"), str(payload.get("filename") or "")[:200]
+        title = str(payload.get("title") or "").strip()[:120]
+        if isinstance(text, str) and len(text) > 5_000_000:
+            return JSONResponse({"detail": "Текст длиннее 5 МБ."}, status_code=413)
+        try:
+            convs = await asyncio.to_thread(memory.parse_import, title or filename, text)
+        except memory.ImportError_ as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=400)
+        source = "text" if any(m["role"] == "note" for c in convs for m in c["messages"]) else "dialog"
+
+        def store_all() -> int:
+            total = 0
+            for conv in convs:
+                db.add_dialog(conv["title"], source, conv["messages"])
+                total += len(conv["messages"])
+            return total
+
+        total = await asyncio.to_thread(store_all)
+        events.emit("Импортирована память", event_type="memory", payload={"dialogs": len(convs), "messages": total})
+        return {"dialogs": len(convs), "messages": total}
+
+    @app.delete("/api/memory/dialogs/{dialog_id}")
+    async def delete_dialog(dialog_id: int):
+        if not await asyncio.to_thread(db.delete_dialog, dialog_id):
+            return JSONResponse({"detail": "Диалог не найден."}, status_code=404)
+        return {"deleted": dialog_id}
+
+    @app.delete("/api/memory/learned")
+    async def clear_learned():
+        return {"removed": await asyncio.to_thread(db.clear_learned)}
+
+    @app.get("/api/memory/search")
+    async def search_memory(q: str = "", limit: int = 6):
+        return {"results": await asyncio.to_thread(db.search_memory, q[:500], limit, 0)}
+
+    # ---------- calendar notes ----------
+    DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+    @app.get("/api/calendar")
+    async def calendar_range(start: str = "", end: str = ""):
+        if not (DAY_RE.match(start) and DAY_RE.match(end)):
+            return JSONResponse({"detail": "Нужны даты start и end в формате ГГГГ-ММ-ДД."}, status_code=400)
+        return {"notes": await asyncio.to_thread(db.list_event_notes, start, end)}
+
+    @app.post("/api/calendar")
+    async def calendar_add(payload: dict[str, Any] = Body(...)):
+        day, text = payload.get("day"), payload.get("text")
+        if not (isinstance(day, str) and DAY_RE.match(day)) or not isinstance(text, str) or not text.strip():
+            return JSONResponse({"detail": "Нужны дата и текст заметки."}, status_code=400)
+        if await asyncio.to_thread(db.day_note_count, day) >= 50:
+            return JSONResponse({"detail": "На один день можно добавить не больше 50 заметок."}, status_code=400)
+        return await asyncio.to_thread(db.add_event_note, day, text.strip()[:300])
+
+    @app.delete("/api/calendar/{note_id}")
+    async def calendar_delete(note_id: int):
+        if not await asyncio.to_thread(db.delete_event_note, note_id):
+            return JSONResponse({"detail": "Заметка не найдена."}, status_code=404)
+        return {"deleted": note_id}
 
     @app.get("/api/events")
     async def recent_events(limit: int = 80):

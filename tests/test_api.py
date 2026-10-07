@@ -202,3 +202,107 @@ def test_ai_test_endpoint_and_chat_clear(monkeypatch, tmp_path: Path):
     client.post("/api/chat", headers=ACTION, json={"text": "hi"})
     assert client.delete("/api/chat", headers=ACTION).json()["removed"] == 2
     assert client.delete("/api/chat").status_code == 403
+
+
+def png_data(size=(300, 500)):
+    import base64, io
+    from PIL import Image
+    out = io.BytesIO()
+    Image.new("RGB", size, (180, 60, 90)).save(out, "PNG")
+    return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
+
+
+def test_face_upload_edit_activate_delete(tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    r = client.post("/api/avatar/faces", headers=ACTION, json={"name": "Тест", "data": png_data()})
+    assert r.status_code == 200
+    fid = r.json()["id"]
+    faces = r.json()["settings"]["faces"]
+    assert [f["id"] for f in faces] == ["default", fid] and faces[1]["url"].startswith("/media/face-")
+    assert client.get(faces[1]["url"]).status_code == 200 and client.get(faces[1]["full"]).status_code == 200
+    r = client.put(f"/api/avatar/faces/{fid}", headers=ACTION, json={"zoom": 2, "x": 0.5, "y": -0.5})
+    new_url = [f for f in r.json()["faces"] if f["id"] == fid][0]["url"]
+    assert new_url != faces[1]["url"] and client.get(new_url).status_code == 200
+    assert client.get(faces[1]["url"]).status_code == 404  # old render removed
+    client.put("/api/settings/avatar", headers=ACTION, json={"active_face": fid, "shape": "rounded"})
+    assert client.get("/api/settings").json()["avatar"]["active_face"] == fid
+    r = client.delete(f"/api/avatar/faces/{fid}", headers=ACTION)
+    assert r.status_code == 200 and [f["id"] for f in r.json()["faces"]] == ["default"]
+    assert r.json()["avatar"]["active_face"] == "default"
+    assert client.get(new_url).status_code == 404
+
+
+def test_upload_validation_and_media_path_safety(tmp_path: Path):
+    client, _, _ = make_client(tmp_path)
+    establish_session(client)
+    assert client.post("/api/avatar/faces", headers=ACTION, json={"data": "aGVsbG8="}).status_code == 400
+    assert client.post("/api/avatar/faces", headers=ACTION, json={}).status_code == 400
+    assert client.put("/api/avatar/faces/default", headers=ACTION, json={}).status_code == 400
+    assert client.delete("/api/avatar/faces/zzzzzzzz", headers=ACTION).status_code == 404
+    assert client.get("/media/..%2Fsecrets.json").status_code in (404, 422)
+    assert client.get("/media/secrets.json").status_code == 404
+    assert client.post("/api/avatar/faces", json={"data": png_data()}).status_code == 403
+    big = client.post("/api/avatar/faces", headers={**ACTION, "Content-Length": "99999999"}, content=b"{}")
+    assert big.status_code == 413
+
+
+def test_background_upload_and_app_settings(tmp_path: Path):
+    client, _, _ = make_client(tmp_path)
+    establish_session(client)
+    r = client.put("/api/settings/app", headers=ACTION, json={"theme": "light", "accent": "rose", "ui_zoom": 500, "background": "image", "bg_image": "evil.jpg"})
+    app = r.json()["app"]
+    assert (app["theme"], app["accent"], app["ui_zoom"], app["background"], app["bg_image"]) == ("light", "rose", 130, "glow", "")
+    r = client.post("/api/background", headers=ACTION, json={"data": png_data((800, 400))})
+    app = r.json()["app"]
+    assert app["background"] == "image" and client.get("/media/" + app["bg_image"]).status_code == 200
+    r = client.put("/api/settings/app", headers=ACTION, json={"theme": "black", "bg_image": "hacked.png"})
+    assert r.json()["app"]["bg_image"] == app["bg_image"]  # file name cannot be set directly
+    r = client.delete("/api/background", headers=ACTION)
+    assert r.json()["app"]["background"] == "glow" and client.get("/media/" + app["bg_image"]).status_code == 404
+
+
+def test_memory_endpoints_and_chat_uses_memory(monkeypatch, tmp_path: Path):
+    client, db, _ = make_client(tmp_path)
+    establish_session(client)
+    r = client.post("/api/memory/import", headers=ACTION, json={"filename": "cats.txt", "text": "Пользователь: мою кошку зовут Мурка\nАссистент: запомнила"})
+    assert r.json() == {"dialogs": 1, "messages": 2}
+    assert client.post("/api/memory/import", headers=ACTION, json={"text": "  "}).status_code == 400
+    assert client.get("/api/memory/search?q=кошку").json()["results"]
+    info = client.get("/api/memory").json()
+    assert info["stats"]["dialogs"] == 1 and info["dialogs"][0]["title"] == "cats"
+    sent = {}
+
+    def fake(u, h, b):
+        sent["system"] = b["messages"][0]["content"]
+        return {"choices": [{"message": {"content": "Мурка"}}]}
+
+    monkeypatch.setattr("core.ai._http_post_json", fake)
+    client.put("/api/settings/ai", headers=ACTION, json={"provider": "openai", "base_url": "http://127.0.0.1:1/v1", "use_character": False})
+    client.post("/api/chat", headers=ACTION, json={"text": "Как зовут мою кошку?"})
+    assert "Мурка" in sent["system"]
+    assert client.get("/api/memory").json()["stats"]["learned"] == 2  # chat turn was learned
+    client.put("/api/settings/memory", headers=ACTION, json={"enabled": False, "learn_chat": False})
+    sent.clear()
+    client.post("/api/chat", headers=ACTION, json={"text": "Как зовут мою кошку?"})
+    assert "Мурка" not in sent.get("system", "")
+    assert client.delete("/api/memory/learned", headers=ACTION).json()["removed"] == 2
+    did = info["dialogs"][0]["id"]
+    assert client.delete(f"/api/memory/dialogs/{did}", headers=ACTION).status_code == 200
+    assert client.delete(f"/api/memory/dialogs/{did}", headers=ACTION).status_code == 404
+
+
+def test_calendar_and_chat_export(tmp_path: Path):
+    client, _, _ = make_client(tmp_path)
+    establish_session(client)
+    assert client.get("/api/calendar?start=bad&end=x").status_code == 400
+    n = client.post("/api/calendar", headers=ACTION, json={"day": "2026-10-07", "text": "  встреча  "}).json()
+    assert n["text"] == "встреча"
+    assert client.post("/api/calendar", headers=ACTION, json={"day": "7.10", "text": "x"}).status_code == 400
+    notes = client.get("/api/calendar?start=2026-10-01&end=2026-10-31").json()["notes"]
+    assert [x["text"] for x in notes] == ["встреча"]
+    assert client.delete(f"/api/calendar/{n['id']}", headers=ACTION).status_code == 200
+    assert client.delete(f"/api/calendar/{n['id']}", headers=ACTION).status_code == 404
+    client.post("/api/chat", headers=ACTION, json={"text": "привет"})
+    exp = client.get("/api/chat/export")
+    assert exp.status_code == 200 and "attachment" in exp.headers["content-disposition"] and len(exp.json()["messages"]) == 2

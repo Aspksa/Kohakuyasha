@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from core import ai, assistant
+from core import ai, assistant, prefs
 
 
 def test_validate_ai_clamps_and_rejects_bad_values():
@@ -17,9 +17,11 @@ def test_validate_ai_clamps_and_rejects_bad_values():
 
 
 def test_validate_avatar():
-    a = ai.validate_avatar({"crop": "x", "shape": "circle", "size": 9999, "ring": 1})
-    assert (a.crop, a.shape, a.size, a.ring) == ("face", "circle", 200, False)
-    assert ai.validate_avatar({}).shape == "soft"  # circle is no longer the default
+    a = prefs.validate_avatar({"crop": "x", "shape": "circle", "size": 9999, "ring": 1, "ring_color": "red", "left_action": "x"})
+    assert (a.crop, a.shape, a.size, a.ring, a.ring_color, a.left_action) == ("face", "circle", 240, False, "#e8be56", "chat")
+    assert prefs.validate_avatar({}).shape == "soft"  # circle is no longer the default
+    assert prefs.validate_avatar({"active_face": "../x"}).active_face == "default"
+    assert prefs.validate_avatar({"glow_color": "#AABBCC", "active_face": "0a1b2c3d"}).glow_color == "#aabbcc"
 
 
 def test_secret_store_never_exposes_key(tmp_path: Path):

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 9,
+  "next_id": 11,
   "tasks": [
     {
       "id": "task-001",
@@ -74,7 +74,7 @@
       "id": "task-007",
       "title": "AI memory: extract facts from chat into SQLite and manage them in the cabinet",
       "priority": 90,
-      "status": "queued",
+      "status": "completed",
       "depends_on": [
         "task-006"
       ],
@@ -83,7 +83,8 @@
         "facts injected into the system prompt",
         "memory tab in cabinet with edit/delete",
         "memory can be disabled"
-      ]
+      ],
+      "result": "Memory: dialog/notes import (JSON, JSONL, ChatGPT/Claude exports, text), SQLite FTS5 retrieval injected into the system prompt, learn-from-chat toggle, cabinet Memory tab. Automatic fact extraction and embeddings remain future work."
     },
     {
       "id": "task-008",
@@ -94,6 +95,30 @@
         "task-006"
       ],
       "result": "ChatGPT-style chat, cabinet (Profile/Avatar/AI/System), face-only avatar with shape options, provider settings with local key store and working Anthropic/OpenAI-compatible calls."
+    },
+    {
+      "id": "task-009",
+      "title": "UI overhaul v0.4.0: sidebar cleanup, themes, clock+calendar, avatar uploads/behavior, resizable panels, Cloud.ru, memory import",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-008"
+      ],
+      "result": "See CHANGELOG change-0010."
+    },
+    {
+      "id": "task-010",
+      "title": "Semantic memory (embeddings) and automatic fact extraction",
+      "priority": 60,
+      "status": "queued",
+      "depends_on": [
+        "task-009"
+      ],
+      "acceptance": [
+        "facts extracted after conversations",
+        "embedding or hybrid search",
+        "editable facts list in cabinet"
+      ]
     }
   ]
 }

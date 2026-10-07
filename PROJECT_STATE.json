@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.3.0",
+  "current_version": "0.4.0",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "chat_cabinet_ai_settings_v0.3.0",
+  "completed_stage": "ui_overhaul_memory_cloudru_v0.4.0",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "47/47 passed",
+      "linux": "65/65 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,15 +36,17 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.3.0"
+    "note": "Run on PR for v0.4.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
     "Autostart trusts any drive carrying the matching .kohakuyasha-id marker and Kohakuyasha.bat (low risk, needs same UUID).",
     "Instance lock file lives on the (possibly removable) project drive.",
     "Physical Windows: user confirmed Kohakuyasha.bat v0.1.4 launches and works; tray menu, full diagnostics, restart and autostart/drive-letter checks not individually confirmed.",
-    "AI provider calls (Anthropic, OpenAI-compatible) are unit-tested with mocks and a local fake server only; not yet verified against a real provider key.",
-    "API key is stored in plain text in data/secrets.json (git-ignored, chmod 600 best effort). Windows DPAPI encryption is a candidate improvement."
+    "API key is stored in plain text in data/secrets.json (git-ignored, chmod 600 best effort). Windows DPAPI encryption is a candidate improvement.",
+    "Cloud.ru provider uses the OpenAI-compatible endpoint https://foundation-models.api.cloud.ru/v1 and example model ids from memory; they could not be verified offline. Both are editable in the cabinet.",
+    "Memory is retrieval-based (SQLite FTS5 with crude Russian prefix stemming), not model fine-tuning; semantic embeddings are a possible later upgrade.",
+    "Real provider calls (Anthropic, OpenAI, Cloud.ru) are verified only with mocks and a local fake server."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -90,7 +92,18 @@
     "avatar_visualization_settings",
     "ai_provider_settings_and_connection_test",
     "local_secret_store",
-    "chat_clear"
+    "chat_clear",
+    "avatar_upload_gallery_with_cropper",
+    "avatar_behavior_settings",
+    "resizable_movable_panels",
+    "themes_black_white_auto_accents_backgrounds",
+    "custom_background_upload",
+    "overview_clock_and_calendar_with_notes",
+    "settings_page_extended",
+    "cloudru_provider",
+    "dialog_import_memory_fts",
+    "calendar_notes",
+    "chat_export"
   ],
-  "next_action": "Merge v0.3.0 after green Windows+Linux CI; verify chat/cabinet on physical Windows with a real provider key; then implement AI memory (task-007 remainder)."
+  "next_action": "Merge v0.4.0 after green Windows+Linux CI; verify on physical Windows (panels resize, uploads, theme switching, memory import, Cloud.ru key); then consider semantic memory and automatic fact extraction."
 }

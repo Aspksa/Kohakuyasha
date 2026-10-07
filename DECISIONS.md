@@ -76,3 +76,21 @@ The provider API key is written only to `data/secrets.json` (git-ignored, chmod 
 **Status:** Active
 
 The avatar is shown on every page/module, draggable, with persisted per-browser position. Left click opens chat, right click (or touch long-press) opens the personal cabinet. Default appearance is face-only with soft edges (no circle); crop, shape, size, ring, glow and status dot are user settings. Chat text is untrusted and rendered only via DOM nodes (no innerHTML) under the strict CSP.
+
+## D-014 — Uploaded images are re-encoded server-side and served from a whitelist
+**Date:** 2026-10-07
+**Status:** Active
+
+Avatar faces and backgrounds are uploaded as base64 JSON (no multipart dependency), decoded with Pillow, re-encoded (metadata stripped, size limited) and stored under `data/media/` with content-derived names. Only names matching a strict pattern are served from `/media/`. Request bodies over 9 MB are rejected.
+
+## D-015 — Memory is retrieval, not training
+**Date:** 2026-10-07
+**Status:** Active
+
+Imported dialogs, notes and (optionally) live chat are stored in SQLite and searched with FTS5; the best fragments are added to the system prompt. This works with every provider, needs no GPU and keeps data local. Fine-tuning and embeddings are future options.
+
+## D-016 — Navigation is Overview and Settings only
+**Date:** 2026-10-07
+**Status:** Active
+
+Observation, Tests and Journal pages were removed from the UI at the owner's request. Diagnostics and event APIs remain for the tray and export. Appearance, clock and startup options live in Settings; AI, avatar and memory live in the personal cabinet.

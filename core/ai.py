@@ -10,9 +10,20 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-PROVIDERS = ("none", "anthropic", "openai")
-DEFAULT_MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-4o-mini"}
-DEFAULT_BASE_URLS = {"anthropic": "https://api.anthropic.com", "openai": "https://api.openai.com/v1"}
+from .prefs import _bool, _choice, _int
+
+PROVIDERS = ("none", "anthropic", "openai", "cloudru")
+DEFAULT_MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-4o-mini", "cloudru": "openai/gpt-oss-120b"}
+DEFAULT_BASE_URLS = {
+    "anthropic": "https://api.anthropic.com",
+    "openai": "https://api.openai.com/v1",
+    "cloudru": "https://foundation-models.api.cloud.ru/v1",  # Cloud.ru Evolution Foundation Models (OpenAI-compatible)
+}
+MODEL_SUGGESTIONS = {
+    "anthropic": ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-4-5-20251001"],
+    "openai": ["gpt-4o-mini", "gpt-4o"],
+    "cloudru": ["openai/gpt-oss-120b", "Qwen/Qwen3-235B-A22B-Instruct-2507", "GigaChat/GigaChat-2-Max"],
+}
 TIMEOUT_SECONDS = 60
 MAX_PROMPT_CHARS = 8000
 
@@ -32,49 +43,8 @@ class AISettings:
     use_character: bool = True
 
 
-@dataclass(slots=True)
-class AvatarSettings:
-    crop: str = "face"        # face | full
-    shape: str = "soft"       # soft | rounded | circle
-    size: int = 96
-    ring: bool = False
-    glow: bool = True
-    status_dot: bool = True
-
-
-def _bool(value: Any, default: bool) -> bool:
-    return value if isinstance(value, bool) else default
-
-
-def _int(value: Any, default: int, low: int, high: int) -> int:
-    if isinstance(value, bool):
-        return default
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        return default
-    return min(max(number, low), high)
-
-
-def _choice(value: Any, allowed: tuple[str, ...], default: str) -> str:
-    return value if isinstance(value, str) and value in allowed else default
-
-
 def _text(value: Any, default: str, limit: int) -> str:
     return value.strip()[:limit] if isinstance(value, str) else default
-
-
-def validate_avatar(raw: dict[str, Any] | None) -> AvatarSettings:
-    raw = raw if isinstance(raw, dict) else {}
-    d = AvatarSettings()
-    return AvatarSettings(
-        crop=_choice(raw.get("crop"), ("face", "full"), d.crop),
-        shape=_choice(raw.get("shape"), ("soft", "rounded", "circle"), d.shape),
-        size=_int(raw.get("size"), d.size, 48, 200),
-        ring=_bool(raw.get("ring"), d.ring),
-        glow=_bool(raw.get("glow"), d.glow),
-        status_dot=_bool(raw.get("status_dot"), d.status_dot),
-    )
 
 
 def validate_base_url(value: Any) -> str:
@@ -110,7 +80,7 @@ def public_ai(settings: AISettings, secrets: "SecretStore") -> dict[str, Any]:
     data = asdict(settings)
     data["has_key"] = secrets.has_key()
     data["key_hint"] = secrets.hint()
-    data["defaults"] = {"models": DEFAULT_MODELS, "base_urls": DEFAULT_BASE_URLS}
+    data["defaults"] = {"models": DEFAULT_MODELS, "base_urls": DEFAULT_BASE_URLS, "suggestions": MODEL_SUGGESTIONS}
     return data
 
 
@@ -158,7 +128,24 @@ class SecretStore:
             self.path.unlink(missing_ok=True)
 
 
-def build_system_prompt(settings: AISettings, character: dict[str, Any]) -> str:
+def format_memory(snippets: list[dict[str, Any]], limit_chars: int = 3000) -> str:
+    names = {"user": "пользователь", "assistant": "ассистент", "note": "заметка"}
+    lines, used = [], 0
+    for item in snippets:
+        line = f"- [{item.get('title', 'чат')} · {names.get(item.get('role'), 'запись')}] {str(item.get('content', ''))[:500]}"
+        if used + len(line) > limit_chars:
+            break
+        lines.append(line)
+        used += len(line)
+    if not lines:
+        return ""
+    return (
+        "Релевантные фрагменты из памяти (прошлые диалоги и заметки пользователя). Используй их как контекст, "
+        "если они уместны, и не выдумывай того, чего в них нет:\n" + "\n".join(lines)
+    )
+
+
+def build_system_prompt(settings: AISettings, character: dict[str, Any], memory: list[dict[str, Any]] | None = None) -> str:
     parts: list[str] = []
     if settings.use_character and character:
         parts.append(
@@ -168,6 +155,9 @@ def build_system_prompt(settings: AISettings, character: dict[str, Any]) -> str:
         )
     if settings.system_prompt:
         parts.append(settings.system_prompt)
+    mem = format_memory(memory or [])
+    if mem:
+        parts.append(mem)
     return "\n\n".join(parts)
 
 
@@ -196,11 +186,11 @@ def _http_post_json(url: str, headers: dict[str, str], body: dict[str, Any]) -> 
 
 
 def complete(settings: AISettings, api_key: str, system: str, messages: list[dict[str, str]]) -> str:
-    if settings.provider not in ("anthropic", "openai"):
+    if settings.provider not in ("anthropic", "openai", "cloudru"):
         raise AIError("ИИ-провайдер не выбран.")
     if not messages:
         raise AIError("Нет сообщений для отправки.")
-    needs_key = settings.provider == "anthropic" or "api.openai.com" in (settings.base_url or DEFAULT_BASE_URLS["openai"])
+    needs_key = settings.provider in ("anthropic", "cloudru") or "api.openai.com" in (settings.base_url or DEFAULT_BASE_URLS["openai"])
     if needs_key and not api_key:
         raise AIError("API-ключ не задан.")
     model = settings.model or DEFAULT_MODELS[settings.provider]
