@@ -153,6 +153,7 @@
       const d = await api("/api/chat", {method: "POST", body: JSON.stringify({text, request_id: requestId}), signal: abortCtl.signal});
       setTyping(false);
       d.messages.filter(m => m.role === "assistant").forEach(m => addMessage(m, true));
+      if (d.remembered && d.remembered.length) { log.append(el("div", "remember-note", "✦ Запомнила: " + d.remembered.join("; "))); toBottom(true); }
       if (d.error) addError(d.error);
     } catch (e) {
       setTyping(false);

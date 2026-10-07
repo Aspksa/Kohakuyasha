@@ -16,9 +16,10 @@ def reply(
     character: dict[str, Any],
     history: list[dict[str, Any]],
     memory: list[dict[str, Any]] | None = None,
+    blocks: list[str] | None = None,
 ) -> str:
     """Answer the latest user message. Without a provider it reports honestly how to connect one."""
     if settings.provider == "none" or not api_key:
         return NOT_CONNECTED
     messages = ai.normalize_history([m for m in history if m.get("content") != NOT_CONNECTED])
-    return ai.complete(settings, api_key, ai.build_system_prompt(settings, character, memory), messages)
+    return ai.complete(settings, api_key, ai.build_system_prompt(settings, character, memory, blocks), messages)

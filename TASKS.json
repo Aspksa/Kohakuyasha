@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 13,
+  "next_id": 15,
   "tasks": [
     {
       "id": "task-001",
@@ -110,7 +110,7 @@
       "id": "task-010",
       "title": "Semantic memory (embeddings) and automatic fact extraction",
       "priority": 60,
-      "status": "queued",
+      "status": "completed",
       "depends_on": [
         "task-009"
       ],
@@ -118,7 +118,8 @@
         "facts extracted after conversations",
         "embedding or hybrid search",
         "editable facts list in cabinet"
-      ]
+      ],
+      "result": "Facts store with automatic extraction, 'запомни' command, dedupe and ranking, rolling summary, calendar/time awareness, editable facts UI. Embeddings remain future work."
     },
     {
       "id": "task-011",
@@ -139,6 +140,29 @@
         "task-011"
       ],
       "result": "See CHANGELOG change-0012."
+    },
+    {
+      "id": "task-013",
+      "title": "v0.7.0 assistant brain: facts, summary, calendar awareness",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-012"
+      ],
+      "result": "See CHANGELOG change-0013."
+    },
+    {
+      "id": "task-014",
+      "title": "Embedding-based semantic memory and calendar reminders",
+      "priority": 50,
+      "status": "queued",
+      "depends_on": [
+        "task-013"
+      ],
+      "acceptance": [
+        "hybrid lexical+semantic retrieval",
+        "reminders delivered via tray notification"
+      ]
     }
   ]
 }

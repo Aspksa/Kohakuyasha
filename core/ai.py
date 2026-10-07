@@ -143,7 +143,9 @@ def format_memory(snippets: list[dict[str, Any]], limit_chars: int = 3000) -> st
     )
 
 
-def build_system_prompt(settings: AISettings, character: dict[str, Any], memory: list[dict[str, Any]] | None = None) -> str:
+def build_system_prompt(
+    settings: AISettings, character: dict[str, Any], memory: list[dict[str, Any]] | None = None, blocks: list[str] | None = None
+) -> str:
     parts: list[str] = []
     if settings.use_character and character:
         parts.append(
@@ -153,6 +155,7 @@ def build_system_prompt(settings: AISettings, character: dict[str, Any], memory:
         )
     if settings.system_prompt:
         parts.append(settings.system_prompt)
+    parts.extend(b for b in (blocks or []) if b)
     mem = format_memory(memory or [])
     if mem:
         parts.append(mem)

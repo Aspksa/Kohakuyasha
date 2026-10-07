@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class Database:
@@ -132,6 +132,19 @@ class Database:
                     created_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_calendar_day ON calendar_events(day);
+                CREATE TABLE IF NOT EXISTS facts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    text TEXT NOT NULL,
+                    category TEXT NOT NULL DEFAULT 'other',
+                    importance INTEGER NOT NULL DEFAULT 3,
+                    pinned INTEGER NOT NULL DEFAULT 0,
+                    source TEXT NOT NULL DEFAULT 'auto',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_used_at TEXT,
+                    use_count INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE INDEX IF NOT EXISTS idx_facts_importance ON facts(importance DESC, updated_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
@@ -354,6 +367,82 @@ class Database:
                     ([f"%{t}%" for t in tokens] + [skip_recent_learned, limit]),
                 ).fetchall()
         return [{"role": r["role"], "content": r["content"], "title": r["title"] or "чат"} for r in rows]
+
+    # ---------- facts (long-term knowledge about the user) ----------
+    FACT_CATEGORIES = ("personal", "preference", "relation", "project", "schedule", "other")
+
+    def add_fact(self, text: str, category: str = "other", importance: int = 3, source: str = "auto", pinned: bool = False) -> int:
+        now = datetime.now(timezone.utc).isoformat()
+        category = category if category in self.FACT_CATEGORIES else "other"
+        with self._lock, self.session() as conn:
+            cur = conn.execute(
+                "INSERT INTO facts(text, category, importance, pinned, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (text[:300], category, max(1, min(5, int(importance))), 1 if pinned else 0, source, now, now),
+            )
+            return int(cur.lastrowid)
+
+    def list_facts(self, limit: int = 500) -> list[dict[str, Any]]:
+        with self._lock, self.session() as conn:
+            rows = conn.execute(
+                "SELECT id, text, category, importance, pinned, source, created_at, updated_at, last_used_at, use_count "
+                "FROM facts ORDER BY pinned DESC, importance DESC, updated_at DESC LIMIT ?",
+                (max(1, min(int(limit), 1000)),),
+            ).fetchall()
+        return [{**dict(r), "pinned": bool(r["pinned"])} for r in rows]
+
+    def update_fact(self, fact_id: int, **changes: Any) -> bool:
+        columns, values = [], []
+        if isinstance(changes.get("text"), str) and changes["text"].strip():
+            columns.append("text = ?"); values.append(changes["text"].strip()[:300])
+        if changes.get("category") in self.FACT_CATEGORIES:
+            columns.append("category = ?"); values.append(changes["category"])
+        if isinstance(changes.get("importance"), int) and not isinstance(changes["importance"], bool):
+            columns.append("importance = ?"); values.append(max(1, min(5, changes["importance"])))
+        if isinstance(changes.get("pinned"), bool):
+            columns.append("pinned = ?"); values.append(1 if changes["pinned"] else 0)
+        if not columns:
+            return False
+        columns.append("updated_at = ?"); values.append(datetime.now(timezone.utc).isoformat())
+        with self._lock, self.session() as conn:
+            return conn.execute(f"UPDATE facts SET {', '.join(columns)} WHERE id = ?", (*values, fact_id)).rowcount > 0
+
+    def delete_fact(self, fact_id: int) -> bool:
+        with self._lock, self.session() as conn:
+            return conn.execute("DELETE FROM facts WHERE id = ?", (fact_id,)).rowcount > 0
+
+    def clear_facts(self, source: str | None = "auto") -> int:
+        with self._lock, self.session() as conn:
+            if source is None:
+                return int(conn.execute("DELETE FROM facts").rowcount)
+            return int(conn.execute("DELETE FROM facts WHERE source = ? AND pinned = 0", (source,)).rowcount)
+
+    def touch_facts(self, ids: list[int]) -> None:
+        if not ids:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock, self.session() as conn:
+            conn.executemany("UPDATE facts SET last_used_at = ?, use_count = use_count + 1 WHERE id = ?", [(now, i) for i in ids])
+
+    def fact_count(self) -> int:
+        with self._lock, self.session() as conn:
+            return int(conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0])
+
+    def trim_facts(self, keep: int = 500) -> None:
+        """Drop the least valuable unpinned facts beyond the cap."""
+        with self._lock, self.session() as conn:
+            conn.execute(
+                "DELETE FROM facts WHERE pinned = 0 AND id NOT IN ("
+                "SELECT id FROM facts ORDER BY pinned DESC, importance DESC, updated_at DESC LIMIT ?)",
+                (keep,),
+            )
+
+    def chat_after(self, after_id: int, limit: int = 200) -> list[dict[str, Any]]:
+        with self._lock, self.session() as conn:
+            rows = conn.execute(
+                "SELECT id, created_at, role, content FROM chat_messages WHERE id > ? ORDER BY id ASC LIMIT ?",
+                (int(after_id), max(1, min(int(limit), 1000))),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     # ---------- calendar ----------
     def add_event_note(self, day: str, text: str) -> dict[str, Any]:
