@@ -3,12 +3,10 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.1.2",
+  "current_version": "0.1.3",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "windows_ci_baseline_v0.1.2",
-  "current_branch": "main",
-  "head_commit": "0ac6fdc0504f87ca783b0b3467edebd160448314",
-  "head_commit_scope": "validated_implementation",
+  "completed_stage": "audit_hardening_v0.1.3",
+  "current_branch": "fix/v0.1.3-audit",
   "last_update": "2026-10-07",
   "canonical_files": [
     "AGENTS.md",
@@ -24,36 +22,26 @@
   "tests": [
     {
       "name": "pytest",
-      "windows": "17/17 passed",
-      "linux": "17/17 passed"
+      "linux": "27/27 passed",
+      "windows": "pending_ci"
     },
     {
       "name": "python_compile",
-      "windows": "passed",
       "linux": "passed"
     },
     {
       "name": "javascript_syntax",
-      "windows": "passed",
       "linux": "passed"
-    },
-    {
-      "name": "powershell_5_1_parser",
-      "windows": "passed"
     }
   ],
   "ci": {
-    "status": "passed",
-    "run_id": 37566980690,
-    "head_commit": "0ac6fdc0504f87ca783b0b3467edebd160448314",
-    "platforms": [
-      "windows-latest",
-      "ubuntu-latest"
-    ],
-    "python": "3.13.16"
+    "status": "pending",
+    "note": "Run on PR for fix/v0.1.3-audit"
   },
   "known_issues": [
-    "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine."
+    "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
+    "Autostart trusts any drive carrying the matching .kohakuyasha-id marker and Kohakuyasha.bat (low risk, needs same UUID).",
+    "Instance lock file lives on the (possibly removable) project drive."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -82,7 +70,13 @@
     "safe_mode",
     "diagnostics_export",
     "russian_interface",
-    "windows_linux_ci"
+    "windows_linux_ci",
+    "diagnostics_concurrency_guard",
+    "deferred_restart_shutdown_response",
+    "periodic_event_trimming",
+    "same_port_restart",
+    "server_start_port_race_retry",
+    "soft_internet_check"
   ],
-  "next_action": "Run Kohakuyasha.bat on a physical Windows machine from a removable drive and execute full diagnostics, tray, restart, and autostart checks."
+  "next_action": "Merge fix/v0.1.3-audit after green Windows+Linux CI, then run Kohakuyasha.bat on a physical Windows machine and execute full diagnostics, tray, restart and autostart checks."
 }

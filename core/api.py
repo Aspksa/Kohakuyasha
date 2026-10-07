@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from typing import Any
 
 from fastapi import FastAPI, Header, Request, WebSocket, WebSocketDisconnect
@@ -20,6 +21,7 @@ from .security import ACTION_HEADER, SESSION_COOKIE, is_allowed_host_header, is_
 def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: EventHub, runtime: RuntimeState) -> FastAPI:
     app = FastAPI(title="Kohakuyasha", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=paths.static), name="static")
+    diagnostics_lock = asyncio.Lock()
 
     def security_headers(response: Response) -> Response:
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -98,18 +100,26 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     @app.post("/api/tests/run")
     async def run_tests(mode: str = "quick", x_kohakuyasha_request: str | None = Header(default=None)):
         mode = "full" if mode == "full" else "quick"
-        runtime.set_status("Тестирование", f"{'Полная' if mode == 'full' else 'Быстрая'} диагностика")
-        events.emit("Запущена диагностика", event_type="diagnostics", payload={"mode": mode})
-        result = await asyncio.to_thread(Diagnostics(paths.root, db, config.load().host, runtime.port).run, mode)
-        runtime.last_test_summary = result
-        runtime.set_status("Наблюдает", "Готова к работе")
-        events.emit(
-            f"Диагностика завершена: {result['passed']}/{result['total']}",
-            level="INFO" if result["ok"] else "WARNING",
-            event_type="diagnostics",
-            payload=result,
-        )
-        return result
+        if diagnostics_lock.locked():
+            return JSONResponse({"detail": "Диагностика уже выполняется."}, status_code=409)
+        async with diagnostics_lock:
+            runtime.set_status("Тестирование", f"{'Полная' if mode == 'full' else 'Быстрая'} диагностика")
+            events.emit("Запущена диагностика", event_type="diagnostics", payload={"mode": mode})
+            try:
+                result = await asyncio.to_thread(Diagnostics(paths.root, db, config.load().host, runtime.port).run, mode)
+            except Exception as exc:
+                events.emit(f"Диагностика прервана: {exc}", level="ERROR", event_type="diagnostics")
+                return JSONResponse({"detail": "Диагностика завершилась ошибкой."}, status_code=500)
+            finally:
+                runtime.set_status("Наблюдает", "Готова к работе")
+            runtime.last_test_summary = result
+            events.emit(
+                f"Диагностика завершена: {result['passed']}/{result['total']}",
+                level="INFO" if result["ok"] else "WARNING",
+                event_type="diagnostics",
+                payload=result,
+            )
+            return result
 
     @app.post("/api/autostart")
     async def set_autostart(payload: dict[str, Any], x_kohakuyasha_request: str | None = Header(default=None)):
@@ -157,14 +167,14 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     async def restart(x_kohakuyasha_request: str | None = Header(default=None)):
         events.emit("Запрошен перезапуск ядра", event_type="system")
         if runtime.on_restart:
-            runtime.on_restart()
+            threading.Timer(0.2, runtime.on_restart).start()
         return {"accepted": bool(runtime.on_restart)}
 
     @app.post("/api/system/shutdown")
     async def shutdown(x_kohakuyasha_request: str | None = Header(default=None)):
         events.emit("Запрошено завершение Kohakuyasha", event_type="system")
         if runtime.on_shutdown:
-            runtime.on_shutdown()
+            threading.Timer(0.2, runtime.on_shutdown).start()
         return {"accepted": bool(runtime.on_shutdown)}
 
     @app.websocket("/ws/events")

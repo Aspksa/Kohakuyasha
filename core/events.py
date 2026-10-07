@@ -16,6 +16,7 @@ class EventHub:
         self.limit = limit
         self._subscribers: set[tuple[asyncio.AbstractEventLoop, asyncio.Queue]] = set()
         self._lock = threading.RLock()
+        self._since_trim: int | None = None
 
     @staticmethod
     def _offer(queue: asyncio.Queue, event: dict[str, Any]) -> None:
@@ -64,8 +65,21 @@ class EventHub:
                     loop.call_soon_threadsafe(self._offer, queue, event)
                 except RuntimeError:
                     pass
-        self.db.trim_events(self.limit)
+        self._maybe_trim()
         return event
+
+    TRIM_EVERY = 50
+
+    def _maybe_trim(self) -> None:
+        with self._lock:
+            if self._since_trim is None or self._since_trim >= self.TRIM_EVERY:
+                self._since_trim = 0
+                due = True
+            else:
+                self._since_trim += 1
+                due = False
+        if due:
+            self.db.trim_events(self.limit)
 
     def subscribe(self) -> tuple[asyncio.AbstractEventLoop, asyncio.Queue]:
         subscription = (asyncio.get_running_loop(), asyncio.Queue(maxsize=500))
