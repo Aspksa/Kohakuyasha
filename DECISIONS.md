@@ -136,3 +136,10 @@ The project updates itself from the configured GitHub repository (default Aspksa
 **Status:** Active
 
 The launcher never gives up on a held single-instance lock immediately: it waits (up to 30 s) while the holder is not healthy, and exits as "already running" only when a serving, non-stopping instance exists (then it just opens the browser). This makes restart-after-update reliable regardless of how long the old process takes to exit. Diagnostics for failed starts live in `logs/launcher-crash.log` and `logs/relaunch.log`.
+
+## D-024 — Adaptive cognition with guarded second-pass review
+**Date:** 2026-10-07
+**Status:** Active
+
+Kohakuyasha classifies each user turn locally as fast or deep without another provider request. Fast turns remain single-pass. Deep analytical, coding and multi-constraint turns receive a stricter cognition prompt and one additional provider pass that reviews the draft for missed requirements, contradictions and factual defects. The review is never required for availability: if it fails, the valid first-pass answer is returned. Memory context is compiled relevance-first and short follow-up requests are expanded with recent user turns before selecting long-term facts.
+
