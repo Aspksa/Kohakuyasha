@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 22,
+  "next_id": 23,
   "tasks": [
     {
       "id": "task-001",
@@ -240,7 +240,7 @@
       "id": "task-021",
       "title": "v0.13.0 Brain v4: planning, confidence and task continuity",
       "priority": 100,
-      "status": "in_progress",
+      "status": "completed",
       "depends_on": [
         "task-020"
       ],
@@ -249,6 +249,23 @@
         "material uncertainty is surfaced without hedging known facts",
         "short continuation commands reuse the previous assistant task state",
         "new contradictory auto-facts replace stale auto-facts",
+        "Linux and Windows CI pass"
+      ],
+      "result": "See CHANGELOG change-0022."
+    },
+    {
+      "id": "task-022",
+      "title": "v0.14.0 Brain v5: hybrid semantic memory retrieval",
+      "priority": 100,
+      "status": "in_progress",
+      "depends_on": [
+        "task-021"
+      ],
+      "acceptance": [
+        "meaning-adjacent queries expand into searchable concepts without external ML dependencies",
+        "imported memory search retrieves a broader candidate set and reranks locally",
+        "fact ranking uses semantic concepts in addition to lexical overlap",
+        "short independent queries do not inherit unrelated recent turns",
         "Linux and Windows CI pass"
       ]
     }
