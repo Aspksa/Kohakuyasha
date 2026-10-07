@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.8.0",
+  "current_version": "0.8.1",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "github_update_performance_v0.8.0",
+  "completed_stage": "overview_decluttered_v0.8.1",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.8.0"
+    "note": "Run on PR for v0.8.1"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -130,8 +130,7 @@
     "update_page_and_badge",
     "private_repo_token",
     "backdrop_filter_removed",
-    "static_cache_revalidation",
-    "compact_overview_assistant_and_update_cards"
+    "static_cache_revalidation"
   ],
-  "next_action": "Merge v0.8.0 after green Windows+Linux CI; on Windows, check that the site feels fast, then use Обновление → Проверить обновления against the real repository (private repo needs a read-only token)."
+  "next_action": "Merge v0.8.1 after green Windows+Linux CI; verify smoothness and the Обновление page against the real GitHub repository on Windows."
 }

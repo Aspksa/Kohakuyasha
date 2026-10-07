@@ -9,7 +9,7 @@ def test_avatar_widget_is_wired_into_index():
     for needle in ('id="avatar"', 'id="chat-panel"', 'id="cabinet-panel"', "/static/avatar.css", "/static/theme.js"):
         assert needle in html
     scripts = re.findall(r'src="/static/([\w.-]+\.js)"', html)
-    assert {"core.js", "avatar.js", "panels.js", "chat.js", "cabinet.js", "cab-avatar.js", "cab-ai.js", "cab-memory.js", "overview.js", "settings.js", "update.js"} <= set(scripts)
+    assert {"core.js", "avatar.js", "panels.js", "chat.js", "cabinet.js", "cab-avatar.js", "cab-ai.js", "cab-memory.js", "settings.js", "update.js"} <= set(scripts)
     for script in scripts:
         assert (WEB / "static" / script).stat().st_size > 0, script
     for asset in ("avatar.png", "avatar-small.png", "avatar-full.png", "avatar.css", "app.css", "pattern.svg"):
@@ -22,7 +22,7 @@ def test_removed_pages_are_gone_from_the_menu():
         assert gone not in html
     assert 'data-page="overview"' in html and 'data-page="settings"' in html
     assert 'data-page="update"' in html and 'id="page-update"' in html
-    for gone in ('id="clock-time"', 'id="cal-grid"', "calendar-card", "clock-card"):
+    for gone in ('id="clock-time"', 'id="cal-grid"', "calendar-card", "clock-card", "assist-card", "update-card", "overview.js"):
         assert gone not in html
 
 
