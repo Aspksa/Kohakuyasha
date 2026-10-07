@@ -142,3 +142,9 @@ The launcher never gives up on a held single-instance lock immediately: it waits
 **Status:** Active
 
 Notifications live in SQLite (`notifications`, deduplicated by key) and are rendered by the UI: badge/bubble on the avatar, cards in the chat. Actions are a closed set of ids (`update_install`, `update_details`, `restart`, `dismiss`) mapped by the UI to existing authenticated API calls; a notification can never carry code or a URL to run. Nothing is installed without the user pressing the button. The tray toast is optional (`runtime.toast`, set by the launcher).
+
+## D-025 — Диск Kohakuyasha is a plain-folder store
+**Date:** 2026-10-07
+**Status:** Active
+
+Files live as ordinary files under `data/disk/files` (so they are visible and portable); the trash is `data/disk/trash/<id>/{payload,meta.json}`. There is no database index. Uploads are a raw streaming `PUT` (no multipart dependency) exempt from the 9 MB API cap and limited by a setting (default 1 GB), written to a `.part` file and renamed on success; names never overwrite (`name (2).ext`). All paths are validated per segment and re-checked against the resolved root; symlinks are ignored.

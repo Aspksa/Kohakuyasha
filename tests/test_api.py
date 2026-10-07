@@ -502,3 +502,37 @@ def test_toast_can_be_disabled_and_dismissed_release_is_not_repeated(monkeypatch
     client.post(f"/api/notifications/{nid}/resolve", headers=ACTION)
     client.post("/api/update/check", headers=ACTION)
     assert client.get("/api/notifications").json()["notifications"] == []  # "later" means: do not nag about the same version
+
+
+def test_disk_api_end_to_end(tmp_path: Path):
+    client, db, runtime = make_client(tmp_path)
+    establish_session(client)
+    assert client.get("/api/disk/list").status_code == 200
+    assert client.post("/api/disk/folder", json={"path": "x"}).status_code == 403  # needs the same-origin marker
+    assert client.post("/api/disk/folder", headers=ACTION, json={"path": "Папка"}).status_code == 200
+    assert client.post("/api/disk/folder", headers=ACTION, json={"path": "../evil"}).status_code == 400
+    body = b"hello " * 400_000  # 2.4 MB, streamed
+    up = client.put("/api/disk/upload?path=Папка&name=hello.txt", headers=ACTION, content=body)
+    assert up.status_code == 200 and up.json()["size"] == len(body)
+    assert client.put("/api/disk/upload?path=Папка&name=..%2Fx.txt", headers=ACTION, content=b"x").status_code == 400
+    assert client.put("/api/disk/upload?path=Нет&name=a.txt", headers=ACTION, content=b"x").status_code == 404
+    assert [i["name"] for i in client.get("/api/disk/list", params={"path": "Папка"}).json()["items"]] == ["hello.txt"]
+    r = client.get("/api/disk/file", params={"path": "Папка/hello.txt"})
+    assert r.status_code == 200 and r.content == body and r.headers["content-type"].startswith("text/plain") and "sandbox" in r.headers["content-security-policy"]
+    dl = client.get("/api/disk/file", params={"path": "Папка/hello.txt", "download": 1})
+    assert dl.headers["content-disposition"].startswith("attachment") and dl.headers["content-type"] == "application/octet-stream"
+    client.put("/api/disk/upload?path=&name=page.html", headers=ACTION, content=b"<script>alert(1)</script>")
+    h = client.get("/api/disk/file", params={"path": "page.html"})
+    assert h.headers["content-disposition"].startswith("attachment") and h.headers["x-content-type-options"] == "nosniff"  # HTML is never rendered inline
+    assert client.get("/api/disk/file", params={"path": "../data/kohakuyasha.db"}).status_code == 400
+    assert client.get("/api/disk/search", params={"q": "hel"}).json()["items"][0]["path"] == "Папка/hello.txt"
+    assert client.post("/api/disk/move", headers=ACTION, json={"from": "Папка/hello.txt", "to": "Папка/hi.txt"}).json()["name"] == "hi.txt"
+    d = client.post("/api/disk/delete", headers=ACTION, json={"path": "Папка/hi.txt"}).json()
+    trash = client.get("/api/disk/trash").json()
+    assert trash["items"][0]["id"] == d["id"]
+    assert client.post("/api/disk/restore", headers=ACTION, json={"id": d["id"]}).json()["name"] == "hi.txt"
+    assert client.put("/api/disk/settings", headers=ACTION, json={"max_file_mb": 1}).json()["settings"]["max_file_mb"] == 1
+    big = client.put("/api/disk/upload?path=&name=big.bin", headers=ACTION, content=b"x" * (2 * 1024 * 1024))
+    assert big.status_code == 413
+    assert not [p for p in (tmp_path / "data" / "disk" / "files").rglob("*.part")]
+    assert client.get("/api/disk").json()["usage"]["files"] >= 2

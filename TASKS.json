@@ -186,12 +186,13 @@
     },
     {
       "id": "task-017",
-      "title": "Stage 2: Диск Kohakuyasha file storage module",
+      "title": "v0.10.0: Диск Kohakuyasha file storage module",
       "priority": 90,
-      "status": "queued",
+      "status": "completed",
       "depends_on": [
         "task-016"
-      ]
+      ],
+      "result": "See CHANGELOG change-0018."
     },
     {
       "id": "task-018",

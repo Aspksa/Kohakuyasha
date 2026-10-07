@@ -9,7 +9,7 @@ def test_avatar_widget_is_wired_into_index():
     for needle in ('id="avatar"', 'id="chat-panel"', 'id="cabinet-panel"', "/static/avatar.css", "/static/theme.js"):
         assert needle in html
     scripts = re.findall(r'src="/static/([\w.-]+\.js)"', html)
-    assert {"core.js", "avatar.js", "panels.js", "chat.js", "cabinet.js", "cab-avatar.js", "cab-ai.js", "cab-memory.js", "settings.js", "update.js"} <= set(scripts)
+    assert {"core.js", "avatar.js", "panels.js", "chat.js", "cabinet.js", "cab-avatar.js", "cab-ai.js", "cab-memory.js", "settings.js", "update.js", "disk.js"} <= set(scripts)
     for script in scripts:
         assert (WEB / "static" / script).stat().st_size > 0, script
     for asset in ("avatar.png", "avatar-small.png", "avatar-full.png", "avatar.css", "app.css", "pattern.svg"):

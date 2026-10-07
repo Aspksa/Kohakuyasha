@@ -1,0 +1,47 @@
+/* Диск Kohakuyasha */
+.disk{padding:16px;display:flex;flex-direction:column;gap:12px;position:relative;min-height:60vh}
+.disk-bar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between}
+.disk-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0;font-size:14px}
+.disk-crumbs .crumb{background:none;border:0;padding:4px 8px;border-radius:8px;color:var(--accent-text);cursor:pointer;min-height:0}
+.disk-crumbs .crumb:hover{background:rgba(var(--accent-rgb),.12)}.disk-crumbs .crumb.last{font-weight:700;color:var(--text)}
+.disk-crumbs .sep{color:var(--muted)}
+.disk-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.disk-search{width:200px;max-width:100%;min-height:36px;border:1px solid var(--line);background:var(--field-bg);color:var(--text);border-radius:10px;padding:0 12px;font:inherit;font-size:13px}
+.disk-tools button{min-height:36px;padding:0 14px}
+.disk-list{display:grid;gap:10px;align-content:start;min-height:220px}
+.disk-list.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.disk-list.list{grid-template-columns:minmax(0,1fr);gap:4px}
+.disk-item{position:relative;display:flex;gap:10px;border:1px solid var(--line);border-radius:14px;background:rgba(var(--ov),.03);cursor:pointer;min-width:0;outline:none}
+.disk-item:hover,.disk-item:focus-visible{border-color:rgba(var(--accent-rgb),.55);background:rgba(var(--accent-rgb),.07)}
+.disk-list.grid .disk-item{flex-direction:column;padding:10px;align-items:stretch}
+.disk-list.list .disk-item{align-items:center;padding:8px 12px}
+.disk-item .ico{display:flex;align-items:center;justify-content:center;font-size:34px;flex:none;overflow:hidden;border-radius:10px}
+.disk-list.grid .ico{height:96px;background:rgba(var(--ov),.04)}.disk-list.list .ico{width:40px;height:40px;font-size:24px}
+.disk-item .ico img{width:100%;height:100%;object-fit:cover}
+.disk-item .dmeta{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.disk-item .dmeta b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.disk-item .dmeta small{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.disk-acts{display:flex;gap:4px;flex:none}
+.disk-acts button{min-height:30px!important;padding:0 9px!important;font-size:12px!important}
+.disk-list.grid .disk-acts{position:absolute;top:6px;right:6px;opacity:0;transition:opacity .15s;background:var(--panel-solid);border-radius:10px;padding:2px}
+.disk-list.grid .disk-item:hover .disk-acts,.disk-list.grid .disk-item:focus-within .disk-acts{opacity:1}
+.disk-list.grid .disk-trashbar{grid-column:1/-1}
+.disk-trashbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.disk-empty{grid-column:1/-1;text-align:center;padding:48px 12px;color:var(--muted)}
+.disk-empty .big{font-size:56px;opacity:.5}
+.disk-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.disk-foot .link-btn{background:none;border:0;color:var(--accent-text);cursor:pointer;min-height:0;padding:0}
+.disk-uploads{display:flex;flex-direction:column;gap:6px}
+.up-row{display:grid;grid-template-columns:minmax(0,1fr) 140px 70px;gap:10px;align-items:center;font-size:12px}
+.up-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-bar{height:6px;border-radius:99px;background:rgba(var(--ov),.1);overflow:hidden}.up-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-dark));transition:width .15s}
+.up-row.ok small{color:var(--ok-text)}.up-row.bad small{color:var(--err-text)}
+.disk-drop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;border:2px dashed var(--accent);border-radius:var(--r-card);background:rgba(var(--accent-rgb),.14);font-size:18px;font-weight:700;color:var(--accent-text);z-index:5;pointer-events:none}
+.disk-drop.show{display:flex}
+.disk-modal{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.72)}
+.disk-modal-card{display:flex;flex-direction:column;max-width:min(960px,100%);max-height:100%;min-width:min(420px,100%);border:1px solid var(--line);border-radius:var(--r-card);background:var(--panel-solid);overflow:hidden}
+.disk-modal-head{display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}.disk-modal-head b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.disk-modal-head .grow{flex:1}
+.disk-modal-head button{min-height:32px;padding:0 12px}
+.disk-modal-body{overflow:auto;padding:12px;display:flex;justify-content:center}
+.disk-modal-body img,.disk-modal-body video{max-width:100%;max-height:75vh}.disk-modal-body pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;width:100%}
+@media(max-width:640px){.disk-search{width:100%}.disk-list.grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}.up-row{grid-template-columns:minmax(0,1fr) 70px}.up-bar{display:none}.disk-list.grid .disk-acts{opacity:1;position:static;justify-content:flex-end}}

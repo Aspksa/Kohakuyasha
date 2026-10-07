@@ -37,6 +37,7 @@ class Paths:
         self.character = self.root / "CHARACTER.json"
         self.secrets = self.data / "secrets.json"
         self.media = self.data / "media"
+        self.disk = self.data / "disk"
 
     def ensure(self) -> None:
         self.data.mkdir(parents=True, exist_ok=True)
