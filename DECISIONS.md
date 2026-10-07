@@ -148,3 +148,10 @@ Notifications live in SQLite (`notifications`, deduplicated by key) and are rend
 **Status:** Active
 
 Files live as ordinary files under `data/disk/files` (so they are visible and portable); the trash is `data/disk/trash/<id>/{payload,meta.json}`. There is no database index. Uploads are a raw streaming `PUT` (no multipart dependency) exempt from the 9 MB API cap and limited by a setting (default 1 GB), written to a `.part` file and renamed on success; names never overwrite (`name (2).ext`). All paths are validated per segment and re-checked against the resolved root; symlinks are ignored.
+
+## D-026 — Adaptive cognition with guarded second-pass review
+**Date:** 2026-10-07
+**Status:** Active
+
+Kohakuyasha classifies each user turn locally as fast or deep. Fast turns remain single-pass. Deep analytical, coding and multi-constraint turns get stronger reasoning instructions plus one additional review pass for missed requirements, contradictions and factual defects. Review failure falls back to the first valid answer. Memory retrieval expands likely follow-ups with recent user turns and ranks facts relevance-first while preserving pinned memory.
+
