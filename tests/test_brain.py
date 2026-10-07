@@ -47,6 +47,15 @@ def test_text_helpers():
     assert brain.explicit_remember("не запомни это") is None and brain.explicit_remember("запомни") is None
 
 
+def test_cognition_router_and_contextual_followups():
+    assert brain.reasoning_mode("привет") == "fast"
+    assert brain.reasoning_mode("Проанализируй архитектуру кода, сравни варианты и объясни почему? Что проверить?") == "deep"
+    history = [{"role": "user", "content": "У меня есть кошка Мурка"}, {"role": "assistant", "content": "Запомнила"}, {"role": "user", "content": "Она любит рыбу"}]
+    expanded = brain.contextual_query("а как её зовут?", history)
+    assert "как её зовут" in expanded and "кошка Мурка" in expanded
+    assert "глубокий" in brain.cognition_block("Проанализируй код\n\nсравни два решения? Что проверить?")
+
+
 def test_parse_facts_json_is_tolerant():
     good = '{"facts":[{"text":"Любит чай","category":"preference","importance":4},{"text":"x"},{"text":"Живёт в Казани","category":"zzz","importance":99}]}'
     out = brain.parse_facts_json(good)
@@ -154,7 +163,7 @@ def test_build_context_has_time_facts_and_summary(db: Database):
     assert "календар" not in text.lower() and len(used) == 1 and brain.GUIDELINES in text
     off = prefs.MemorySettings(use_facts=False, use_summary=False)
     blocks, used = brain.build_context(db, off, "кошка", now)
-    assert len(blocks) == 1 and used == []  # only the clock
+    assert len(blocks) == 2 and used == []  # clock plus cognition mode
 
 
 def test_memory_settings_are_clamped():
