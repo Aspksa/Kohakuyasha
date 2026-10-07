@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 16,
+  "next_id": 17,
   "tasks": [
     {
       "id": "task-001",
@@ -173,6 +173,23 @@
         "task-013"
       ],
       "result": "See CHANGELOG change-0014."
+    },
+    {
+      "id": "task-016",
+      "title": "v0.9.0 Brain v2: adaptive cognition, contextual retrieval and answer review",
+      "priority": 100,
+      "status": "in_progress",
+      "depends_on": [
+        "task-013"
+      ],
+      "acceptance": [
+        "simple requests stay single-pass and fast",
+        "complex requests receive deep reasoning guidance and a second-pass answer review",
+        "review failure falls back to the first valid answer",
+        "memory retrieval uses recent user turns for elliptical follow-ups",
+        "unrelated facts no longer dominate prompt context",
+        "Linux and Windows CI pass"
+      ]
     }
   ]
 }
