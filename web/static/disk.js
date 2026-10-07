@@ -5,7 +5,7 @@
   if (!root) return;
   const ICONS = {folder: "📁", image: "🖼️", text: "📄", audio: "🎵", video: "🎬", pdf: "📕", archive: "🗜️", doc: "📘", file: "📎"};
   const PREFS = "kohakuyasha.disk.view";
-  let path = "", view = "grid", mode = "files", data = null, info = null, trash = null, query = "", loadId = 0;
+  let filter = "all", path = "", view = "grid", mode = "files", data = null, info = null, trash = null, query = "", loadId = 0;
   try { view = localStorage.getItem(PREFS) === "list" ? "list" : "grid"; } catch {}
 
   const btn = (text, cls, fn, title) => { const b = el("button", cls || "", text); b.type = "button"; if (title) { b.title = title; b.setAttribute("aria-label", title); } b.addEventListener("click", fn); return b; };
@@ -19,11 +19,13 @@
   const head = el("div", "disk-bar"), crumbs = el("div", "disk-crumbs"), tools = el("div", "disk-tools");
   const search = el("input", "disk-search"); search.type = "search"; search.placeholder = "Поиск по диску…"; search.maxLength = 80; search.setAttribute("aria-label", "Поиск");
   const picker = el("input"); picker.type = "file"; picker.multiple = true; picker.hidden = true;
+  const chips = el("div", "disk-chips"), usage = el("div", "disk-usage");
+  const FILTERS = [["all", "Все"], ["folder", "Папки"], ["image", "Фото"], ["doc", "Документы"], ["video", "Видео"], ["audio", "Музыка"], ["archive", "Архивы"]];
   const list = el("div", "disk-list"), foot = el("div", "disk-foot"), uploads = el("div", "disk-uploads");
   const drop = el("div", "disk-drop", "Отпустите файлы, чтобы загрузить сюда");
   tools.append(search, btn("⭱ Загрузить", "primary", () => picker.click()), btn("＋ Папка", "", newFolder), btn("☰", "", toggleView, "Вид: сетка / список"), btn("🗑 Корзина", "", () => { mode = mode === "trash" ? "files" : "trash"; refresh(); }));
   head.append(crumbs, tools);
-  const panel = el("section", "panel disk"); panel.append(head, list, uploads, foot, drop, picker);
+  const panel = el("section", "panel disk"); panel.append(head, usage, chips, list, foot, drop, picker); document.body.append(uploads);
   root.append(panel);
 
   // ---------- data ----------
@@ -59,15 +61,27 @@
     box.append(btn("🗑", "danger-btn", (e) => { e.stopPropagation(); remove(it); }, "В корзину"));
     return box;
   }
+  const matches = (it) => filter === "all" || (filter === "folder" ? it.dir : filter === "doc" ? ["doc", "text", "pdf"].includes(it.kind) : it.kind === filter);
+  function drawChips() {
+    chips.hidden = mode === "trash";
+    chips.replaceChildren(...FILTERS.map(([id, label]) => btn(label, "chip-btn" + (filter === id ? " on" : ""), () => { filter = id; draw(); })));
+  }
+  function drawUsage() {
+    const u = info.usage, total = u.bytes + u.free, pc = total ? Math.max(u.bytes ? 1 : 0, Math.min(100, Math.round(u.bytes / total * 100))) : 0;
+    const bar = el("div", "ubar"), fill = el("i"); fill.style.width = pc + "%"; bar.append(fill);
+    const txt = el("div", "utxt"); txt.append(el("b", "", fmtSize(u.bytes)), el("span", "", ` из ${fmtSize(total)} · ${u.files} файл.`));
+    usage.replaceChildren(el("div", "ucloud", "☁"), el("div", "ubody", ""), );
+    usage.querySelector(".ubody").append(txt, bar);
+  }
   function drawFiles() {
-    const items = data.items;
+    const items = data.items.filter(matches);
     list.className = `disk-list ${view}`;
-    if (!items.length) { list.replaceChildren(emptyBox(data.search ? "Ничего не найдено." : "Здесь пока пусто. Перетащите файлы сюда или нажмите «Загрузить».")); return; }
+    if (!items.length) { list.replaceChildren(emptyBox(data.search ? "Ничего не найдено." : filter !== "all" ? "В этой папке нет подходящих файлов." : "Здесь пока пусто. Перетащите файлы сюда или нажмите «Загрузить».")); return; }
     list.replaceChildren(...items.map(it => {
       const row = el("div", "disk-item" + (it.dir ? " dir" : "")); row.tabIndex = 0;
-      const ico = el("div", "ico");
+      const ico = el("div", "ico k-" + (it.dir ? "folder" : it.kind));
       if (it.kind === "image" && it.inline) { const im = el("img"); im.loading = "lazy"; im.alt = ""; im.src = fileUrl(it.path); ico.append(im); }
-      else ico.textContent = ICONS[it.kind] || ICONS.file;
+      else { ico.textContent = ICONS[it.kind] || ICONS.file; if (!it.dir) ico.append(el("em", "", (it.name.split(".").pop() || "").slice(0, 4).toUpperCase())); }
       const meta = el("div", "dmeta"), name = el("b", "", it.name); name.title = it.name;
       meta.append(name, el("small", "", it.dir ? (data.search ? `Папка · ${it.path}` : "Папка") : `${fmtSize(it.size)} · ${fmtDate(it.modified)}${data.search ? " · " + it.path : ""}`));
       row.append(ico, meta, itemActions(it));
@@ -95,10 +109,10 @@
   }
   function drawFoot() {
     const u = info.usage;
-    foot.replaceChildren(el("span", "", `Занято: ${fmtSize(u.bytes)} · файлов: ${u.files} · в корзине: ${fmtSize(u.trash_bytes)} · свободно на диске: ${fmtSize(u.free)}`),
+    foot.replaceChildren(el("span", "", `В корзине: ${fmtSize(u.trash_bytes)} · свободно на устройстве: ${fmtSize(u.free)} · лимит файла: ${info.settings.max_file_mb} МБ`),
       btn("Настройки", "link-btn", settings));
   }
-  function draw() { drawCrumbs(); if (mode === "trash") drawTrash(); else drawFiles(); drawFoot(); }
+  function draw() { drawCrumbs(); drawUsage(); drawChips(); if (mode === "trash") drawTrash(); else drawFiles(); drawFoot(); }
 
   // ---------- actions ----------
   function toggleView() { view = view === "grid" ? "list" : "grid"; try { localStorage.setItem(PREFS, view); } catch {} draw(); }
