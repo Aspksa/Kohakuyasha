@@ -52,3 +52,16 @@ def test_chat_messages_and_migration_from_v1(tmp_path):
     db.add_chat_message("assistant", "b")
     assert [m["content"] for m in db.recent_chat(10)] == ["a", "b"]
     assert db.chat_count() == 2
+
+
+def test_notifications_dedupe_resolve_and_cap(tmp_path):
+    db = Database(tmp_path / "k.db"); db.initialize()
+    first = db.add_notification("update", "Обновление", "тело", [{"id": "dismiss", "label": "Позже"}], dedupe_key="update:1.0.0")
+    assert first and first["status"] == "new" and first["actions"][0]["id"] == "dismiss"
+    assert db.add_notification("update", "Обновление", dedupe_key="update:1.0.0") is None
+    assert len(db.unread_notifications()) == 1 and db.mark_notifications_seen() == 1 and db.unread_notifications() == []
+    assert db.resolve_notification(first["id"]) and db.list_notifications() == []
+    assert db.add_notification("update", "ещё", dedupe_key="update:1.0.0") is None  # a dismissed card is not re-created
+    for i in range(120):
+        db.add_notification("info", f"n{i}")
+    assert len(db.list_notifications(100)) == 100

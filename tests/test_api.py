@@ -454,3 +454,85 @@ def test_static_files_use_revalidation_and_media_is_immutable(tmp_path: Path):
     assert client.get("/").headers["cache-control"] == "no-store"
     establish_session(client)
     assert client.get("/api/settings").headers["cache-control"] == "no-store"
+
+
+def test_notifications_update_card_toast_and_actions(monkeypatch, tmp_path: Path):
+    from core import updater
+    client, db, runtime = make_client(tmp_path)
+    toasts = []
+    runtime.toast = lambda title, message: toasts.append((title, message))
+    establish_session(client)
+    assert client.get("/api/status").json()["notifications"] == {"unread": 0, "latest": None}
+
+    monkeypatch.setattr(updater, "fetch_text", lambda repo, branch, path, token, limit=0: "9.9.9\n" if path == "VERSION" else json.dumps({"version": "9.9.9", "summary": "Новое"}) + "\n")
+    monkeypatch.setattr(updater, "fetch_commit", lambda *a: {"sha": "abc1234", "date": ""})
+    monkeypatch.setattr(updater, "fetch_zip", lambda *a: update_zip())
+    client.post("/api/update/check", headers=ACTION)
+    client.post("/api/update/check", headers=ACTION)  # the same release is announced only once
+    st = client.get("/api/status").json()["notifications"]
+    assert st["unread"] == 1 and st["latest"]["kind"] == "update" and "9.9.9" in st["latest"]["title"]
+    assert len(toasts) == 1 and "9.9.9" in toasts[0][0]
+    cards = client.get("/api/notifications").json()["notifications"]
+    assert [a["id"] for a in cards[0]["actions"]] == ["update_install", "update_details", "dismiss"]
+
+    assert client.post("/api/notifications/seen").status_code == 403  # needs the same-origin marker
+    assert client.post("/api/notifications/seen", headers=ACTION).json()["seen"] == 1
+    assert client.get("/api/status").json()["notifications"]["unread"] == 0 and len(client.get("/api/notifications").json()["notifications"]) == 1
+
+    client.post("/api/update/install", headers=ACTION)  # installing replaces the card with a "restart" card
+    cards = client.get("/api/notifications").json()["notifications"]
+    assert [c["kind"] for c in cards] == ["restart"] and "9.9.9" in cards[0]["title"]
+    assert client.post(f"/api/notifications/{cards[0]['id']}/resolve", headers=ACTION).status_code == 200
+    assert client.get("/api/notifications").json()["notifications"] == []
+    assert client.post("/api/notifications/999/resolve", headers=ACTION).status_code == 404
+
+
+def test_toast_can_be_disabled_and_dismissed_release_is_not_repeated(monkeypatch, tmp_path: Path):
+    from core import updater
+    client, db, runtime = make_client(tmp_path)
+    toasts = []
+    runtime.toast = lambda title, message: toasts.append(title)
+    establish_session(client)
+    client.put("/api/settings/app", headers=ACTION, json={"toast": False})
+    monkeypatch.setattr(updater, "fetch_text", lambda repo, branch, path, token, limit=0: "9.9.9\n" if path == "VERSION" else "")
+    monkeypatch.setattr(updater, "fetch_commit", lambda *a: {"sha": "", "date": ""})
+    client.post("/api/update/check", headers=ACTION)
+    assert toasts == [] and client.get("/api/status").json()["notifications"]["unread"] == 1
+    nid = client.get("/api/notifications").json()["notifications"][0]["id"]
+    client.post(f"/api/notifications/{nid}/resolve", headers=ACTION)
+    client.post("/api/update/check", headers=ACTION)
+    assert client.get("/api/notifications").json()["notifications"] == []  # "later" means: do not nag about the same version
+
+
+def test_disk_api_end_to_end(tmp_path: Path):
+    client, db, runtime = make_client(tmp_path)
+    establish_session(client)
+    assert client.get("/api/disk/list").status_code == 200
+    assert client.post("/api/disk/folder", json={"path": "x"}).status_code == 403  # needs the same-origin marker
+    assert client.post("/api/disk/folder", headers=ACTION, json={"path": "Папка"}).status_code == 200
+    assert client.post("/api/disk/folder", headers=ACTION, json={"path": "../evil"}).status_code == 400
+    body = b"hello " * 400_000  # 2.4 MB, streamed
+    up = client.put("/api/disk/upload?path=Папка&name=hello.txt", headers=ACTION, content=body)
+    assert up.status_code == 200 and up.json()["size"] == len(body)
+    assert client.put("/api/disk/upload?path=Папка&name=..%2Fx.txt", headers=ACTION, content=b"x").status_code == 400
+    assert client.put("/api/disk/upload?path=Нет&name=a.txt", headers=ACTION, content=b"x").status_code == 404
+    assert [i["name"] for i in client.get("/api/disk/list", params={"path": "Папка"}).json()["items"]] == ["hello.txt"]
+    r = client.get("/api/disk/file", params={"path": "Папка/hello.txt"})
+    assert r.status_code == 200 and r.content == body and r.headers["content-type"].startswith("text/plain") and "sandbox" in r.headers["content-security-policy"]
+    dl = client.get("/api/disk/file", params={"path": "Папка/hello.txt", "download": 1})
+    assert dl.headers["content-disposition"].startswith("attachment") and dl.headers["content-type"] == "application/octet-stream"
+    client.put("/api/disk/upload?path=&name=page.html", headers=ACTION, content=b"<script>alert(1)</script>")
+    h = client.get("/api/disk/file", params={"path": "page.html"})
+    assert h.headers["content-disposition"].startswith("attachment") and h.headers["x-content-type-options"] == "nosniff"  # HTML is never rendered inline
+    assert client.get("/api/disk/file", params={"path": "../data/kohakuyasha.db"}).status_code == 400
+    assert client.get("/api/disk/search", params={"q": "hel"}).json()["items"][0]["path"] == "Папка/hello.txt"
+    assert client.post("/api/disk/move", headers=ACTION, json={"from": "Папка/hello.txt", "to": "Папка/hi.txt"}).json()["name"] == "hi.txt"
+    d = client.post("/api/disk/delete", headers=ACTION, json={"path": "Папка/hi.txt"}).json()
+    trash = client.get("/api/disk/trash").json()
+    assert trash["items"][0]["id"] == d["id"]
+    assert client.post("/api/disk/restore", headers=ACTION, json={"id": d["id"]}).json()["name"] == "hi.txt"
+    assert client.put("/api/disk/settings", headers=ACTION, json={"max_file_mb": 1}).json()["settings"]["max_file_mb"] == 1
+    big = client.put("/api/disk/upload?path=&name=big.bin", headers=ACTION, content=b"x" * (2 * 1024 * 1024))
+    assert big.status_code == 413
+    assert not [p for p in (tmp_path / "data" / "disk" / "files").rglob("*.part")]
+    assert client.get("/api/disk").json()["usage"]["files"] >= 2

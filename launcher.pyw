@@ -168,6 +168,7 @@ class Supervisor:
         self.runtime.watchdog_active = False
 
     def run(self) -> None:
+        self.runtime.toast = lambda title, message: self.tray.notify(title, message) if self.tray else None
         self.runtime.on_restart = lambda: threading.Thread(target=self.restart, daemon=True).start()
         self.runtime.on_shutdown = lambda: threading.Thread(target=self.shutdown, daemon=True).start()
         self.start_server()

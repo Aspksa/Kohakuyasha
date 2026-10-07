@@ -8,6 +8,7 @@
     },
     listeners: [],
     hooks: {},
+    statusHooks: [],  // fn(status) called after every /api/status poll
     tabs: [],
     DEFAULT_FACE,
     api: async (url, options = {}) => {

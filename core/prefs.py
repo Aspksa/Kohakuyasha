@@ -91,6 +91,8 @@ class AppSettings:
     animations: bool = True
     pattern: bool = True        # soft seigaiha wave pattern in the background
     petals: bool = True         # falling sakura petals
+    notifications: bool = True  # badge and bubble on the avatar; the chat shows the details
+    toast: bool = True          # Windows tray notification for the same events
 
 
 ACCENTS = ("gold", "rose", "violet", "blue", "green", "red")
@@ -114,6 +116,8 @@ def validate_app(raw: dict[str, Any] | None) -> AppSettings:
         animations=_bool(raw.get("animations"), d.animations),
         pattern=_bool(raw.get("pattern"), d.pattern),
         petals=_bool(raw.get("petals"), d.petals),
+        notifications=_bool(raw.get("notifications"), d.notifications),
+        toast=_bool(raw.get("toast"), d.toast),
     )
 
 

@@ -76,6 +76,15 @@ class TrayController:
         self.icon = pystray.Icon("Kohakuyasha", create_icon_image(), "Kohakuyasha", menu)
         self.icon.run()
 
+    def notify(self, title: str, message: str) -> None:
+        icon = self.icon
+        if icon is None:
+            return
+        try:
+            icon.notify(message[:240], title[:60])
+        except Exception:  # not every shell supports balloon notifications: never break the caller
+            pass
+
     def stop(self) -> None:
         if self.icon:
             self.icon.stop()

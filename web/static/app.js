@@ -3,7 +3,7 @@
   const $ = (q) => document.querySelector(q);
   const $$ = (q) => [...document.querySelectorAll(q)];
   const Koh = window.Koh;
-  const PAGES = ["overview", "update", "settings"];
+  const PAGES = ["overview", "disk", "update", "settings"];
 
   function formatUptime(s) {
     s = Math.max(0, Number(s) || 0);
@@ -26,6 +26,7 @@
       $("#overall-state").textContent = d.services.core === "ONLINE" ? "ONLINE" : "ПРОВЕРКА";
       Koh.status = d;
       if (Koh.onStatus) Koh.onStatus(d);
+      Koh.statusHooks.forEach(fn => { try { fn(d); } catch (e) { console.error(e); } });
     } catch {
       $("#side-status").textContent = "Нет связи"; $("#side-action").textContent = "Ожидание ядра"; $("#overall-state").textContent = "OFFLINE";
     }
@@ -34,6 +35,7 @@
     if (!PAGES.includes(page)) page = "overview";
     $$(".nav").forEach(x => x.classList.toggle("active", x.dataset.page === page));
     $$(".page").forEach(x => x.classList.toggle("active", x.id === `page-${page}`));
+    if (page === "disk" && Koh.refreshDisk) Koh.refreshDisk();
     if (location.hash.slice(1) !== page) history.replaceState(null, "", page === "overview" ? location.pathname : `#${page}`);
   }
   $$(".nav").forEach(x => x.addEventListener("click", () => go(x.dataset.page)));

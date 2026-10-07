@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, Header, Request, WebSocket, WebSocketDisconne
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, assistant, autostart, brain, media, memory, prefs, updater
+from . import ai, assistant, autostart, brain, disk as disk_mod, media, memory, notifier as notifier_mod, prefs, updater
 from .config import ConfigStore, Paths
 from .database import Database
 from .diagnostics import Diagnostics
@@ -30,6 +30,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     cancelled_requests: dict[str, float] = {}
     app.state.run_background = lambda fn: threading.Thread(target=fn, daemon=True, name="kohakuyasha-memory").start()
     secrets = ai.SecretStore(paths.secrets)
+    notifier = notifier_mod.Notifier(db, runtime, events)
 
     def load_character() -> dict:
         try:
@@ -53,6 +54,10 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     store = media.MediaStore(paths.media)
     MAX_FACES = 12
     MAX_BODY = 9_000_000
+    disk_store = disk_mod.DiskStore(paths.disk)
+
+    def disk_settings() -> dict[str, int]:
+        return disk_mod.validate_settings(db.get_setting("disk"))
 
     def faces_list() -> list[dict]:
         raw = db.get_setting("faces", [])
@@ -93,11 +98,12 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
             response.headers["Cache-Control"] = "no-cache"  # revalidate by ETag: cheap 304s, instant updates after an upgrade
         else:
             response.headers["Cache-Control"] = "no-store"
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; "
-            "connect-src 'self' ws://127.0.0.1:* ws://localhost:*; "
-            "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
-        )
+        if "content-security-policy" not in response.headers:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; "
+                "connect-src 'self' ws://127.0.0.1:* ws://localhost:*; "
+                "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+            )
         return response
 
     @app.middleware("http")
@@ -110,8 +116,10 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
             return security_headers(JSONResponse({"detail": "Недопустимый Origin."}, status_code=403))
 
         if request.url.path.startswith("/api/"):
+            is_upload = request.url.path == "/api/disk/upload"
             try:
-                too_big = int(request.headers.get("content-length") or 0) > MAX_BODY
+                length = int(request.headers.get("content-length") or 0)
+                too_big = length > (disk_settings()["max_file_mb"] * 1024 * 1024 if is_upload else MAX_BODY)
             except ValueError:
                 too_big = True
             if too_big:
@@ -143,12 +151,15 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
 
     @app.get("/api/status")
     async def status():
-        settings, snap, autostart_enabled = await asyncio.gather(
+        settings, snap, autostart_enabled, unread = await asyncio.gather(
             asyncio.to_thread(config.load),
             asyncio.to_thread(runtime.snapshot),
             asyncio.to_thread(autostart.is_enabled),
+            asyncio.to_thread(db.unread_notifications),
         )
+        latest = unread[-1] if unread else None
         return {
+            "notifications": {"unread": len(unread), "latest": {"id": latest["id"], "kind": latest["kind"], "title": latest["title"]} if latest else None},
             "runtime": snap,
             "settings": {
                 "language": settings.language,
@@ -585,14 +596,23 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         await asyncio.to_thread(secrets.delete, "github_token")
         return await asyncio.to_thread(update_state)
 
+    def do_update_check() -> dict:
+        cfg = update_settings()
+        info = updater.check(cfg.repo, cfg.branch, secrets.get("github_token"), runtime.version)
+        db.set_setting("update_info", info)
+        notifier.update_available(info, runtime.version)
+        return info
+
+    def background_update_check() -> None:
+        if update_settings().auto_check:
+            do_update_check()
+
     @app.post("/api/update/check")
     async def update_check():
-        cfg = await asyncio.to_thread(update_settings)
         try:
-            info = await asyncio.to_thread(updater.check, cfg.repo, cfg.branch, secrets.get("github_token"), runtime.version)
+            await asyncio.to_thread(do_update_check)
         except updater.UpdateError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=502)
-        await asyncio.to_thread(db.set_setting, "update_info", info)
         return await asyncio.to_thread(update_state)
 
     @app.post("/api/update/install")
@@ -612,6 +632,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         except updater.UpdateError as exc:
             return JSONResponse({"detail": str(exc)}, status_code=409 if "актуальная" in str(exc) else 502)
         events.emit(f"Проект обновлён до v{result['version']}", event_type="update", payload=result)
+        await asyncio.to_thread(notifier.update_installed, str(result["version"]), os.name == "nt")
         return {"result": result, "state": await asyncio.to_thread(update_state)}
 
     @app.post("/api/update/rollback")
@@ -629,6 +650,126 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         if started and runtime.on_shutdown:
             threading.Timer(0.6, runtime.on_shutdown).start()
         return {"relaunched": started}
+
+    # ---------- notifications ----------
+    @app.get("/api/notifications")
+    async def get_notifications():
+        return {"notifications": await asyncio.to_thread(db.list_notifications)}
+
+    @app.post("/api/notifications/seen")
+    async def notifications_seen():
+        return {"seen": await asyncio.to_thread(db.mark_notifications_seen)}
+
+    @app.post("/api/notifications/{nid}/resolve")
+    async def notification_resolve(nid: int):
+        if not await asyncio.to_thread(db.resolve_notification, nid):
+            return JSONResponse({"detail": "Уведомление не найдено."}, status_code=404)
+        return {"resolved": nid}
+
+    watcher = notifier_mod.UpdateWatcher(background_update_check)
+    app.router.on_startup.append(watcher.start)
+    app.router.on_shutdown.append(watcher.stop)
+
+    # ---------- Диск Kohakuyasha ----------
+    async def disk_call(fn, *args):
+        try:
+            return await asyncio.to_thread(fn, *args)
+        except disk_mod.DiskError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+        except OSError as exc:
+            return JSONResponse({"detail": f"Ошибка диска: {exc.strerror or exc}"}, status_code=500)
+
+    @app.get("/api/disk")
+    async def disk_info():
+        def run() -> dict:
+            disk_store.ensure()
+            return {"settings": disk_settings(), "usage": disk_store.usage(), "root": str(disk_store.files)}
+        return await disk_call(run)
+
+    @app.put("/api/disk/settings")
+    async def disk_put_settings(payload: dict[str, Any] = Body(...)):
+        await asyncio.to_thread(db.set_setting, "disk", disk_mod.validate_settings(payload))
+        return {"settings": disk_settings()}
+
+    @app.get("/api/disk/list")
+    async def disk_list(path: str = ""):
+        return await disk_call(disk_store.list, path)
+
+    @app.get("/api/disk/search")
+    async def disk_search(q: str = ""):
+        result = await disk_call(disk_store.search, q)
+        return result if isinstance(result, JSONResponse) else {"items": result}
+
+    @app.post("/api/disk/folder")
+    async def disk_folder(payload: dict[str, Any] = Body(...)):
+        return await disk_call(disk_store.mkdir, payload.get("path"))
+
+    @app.post("/api/disk/move")
+    async def disk_move(payload: dict[str, Any] = Body(...)):
+        return await disk_call(disk_store.move, payload.get("from"), payload.get("to"))
+
+    @app.post("/api/disk/delete")
+    async def disk_delete(payload: dict[str, Any] = Body(...)):
+        result = await disk_call(disk_store.delete, payload.get("path"))
+        if not isinstance(result, JSONResponse):
+            events.emit(f"Диск: в корзину «{result['name']}»", event_type="disk")
+        return result
+
+    @app.get("/api/disk/trash")
+    async def disk_trash():
+        result = await disk_call(lambda: disk_store.trash_list(disk_settings()["trash_days"]))
+        return result if isinstance(result, JSONResponse) else {"items": result, "days": disk_settings()["trash_days"]}
+
+    @app.post("/api/disk/restore")
+    async def disk_restore(payload: dict[str, Any] = Body(...)):
+        return await disk_call(disk_store.restore, payload.get("id"))
+
+    @app.delete("/api/disk/trash/{tid}")
+    async def disk_purge(tid: str):
+        result = await disk_call(disk_store.purge, tid)
+        return result if isinstance(result, JSONResponse) else {"purged": tid}
+
+    @app.delete("/api/disk/trash")
+    async def disk_empty_trash():
+        result = await disk_call(disk_store.empty_trash)
+        return result if isinstance(result, JSONResponse) else {"purged": result}
+
+    @app.put("/api/disk/upload")
+    async def disk_upload(request: Request, path: str = "", name: str = ""):
+        limit = disk_settings()["max_file_mb"] * 1024 * 1024
+        if not request.headers.get("content-length"):
+            return JSONResponse({"detail": "Нужен Content-Length."}, status_code=411)
+        try:
+            upload = await asyncio.to_thread(disk_store.begin_upload, path, name, limit)
+        except disk_mod.DiskError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+        try:
+            async for chunk in request.stream():
+                await asyncio.to_thread(upload.write, chunk)
+            entry = await asyncio.to_thread(upload.commit)
+        except disk_mod.DiskError as exc:
+            await asyncio.to_thread(upload.abort)
+            return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+        except BaseException:
+            await asyncio.to_thread(upload.abort)
+            raise
+        events.emit(f"Диск: загружен «{entry['name']}»", event_type="disk")
+        return entry
+
+    @app.get("/api/disk/file")
+    async def disk_file(path: str, download: int = 0):
+        try:
+            file = await asyncio.to_thread(disk_store.file_for_read, path)
+        except disk_mod.DiskError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+        inline_type = disk_mod.INLINE_TYPES.get(file.suffix.lower())
+        if download or not inline_type:
+            response = FileResponse(file, filename=file.name, media_type="application/octet-stream", content_disposition_type="attachment")
+        else:
+            response = FileResponse(file, filename=file.name, media_type=inline_type, content_disposition_type="inline")
+        if not (inline_type or "").startswith("application/pdf"):  # the PDF viewer does not work under a sandbox CSP
+            response.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
+        return response
 
     @app.get("/api/events")
     async def recent_events(limit: int = 80):

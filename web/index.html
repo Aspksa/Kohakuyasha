@@ -8,6 +8,7 @@
   <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/avatar.css">
+  <link rel="stylesheet" href="/static/disk.css">
   <script src="/static/theme.js"></script>
 </head>
 <body>
@@ -17,6 +18,7 @@
       <div class="brand"><img src="/static/logo.svg" data-logo alt=""><div><strong>Kohakuyasha</strong><span>личная система</span></div></div>
       <nav class="menu">
         <button class="nav active" data-page="overview"><span>◈</span> Обзор</button>
+        <button class="nav" data-page="disk"><span>☁</span> Диск Kohakuyasha</button>
         <button class="nav" data-page="update"><span>⭳</span> Обновление<i class="nav-dot" id="update-dot" hidden></i></button>
         <button class="nav" data-page="settings"><span>⚙</span> Настройки</button>
       </nav>
@@ -43,6 +45,11 @@
         </div>
       </section>
 
+      <section class="page" id="page-disk">
+        <div class="page-head"><div><p class="eyebrow">ХРАНИЛИЩЕ</p><h1>Диск Kohakuyasha</h1></div></div>
+        <div id="disk-root"></div>
+      </section>
+
       <section class="page" id="page-update">
         <div class="page-head"><div><p class="eyebrow">ПРОЕКТ</p><h1>Обновление</h1></div></div>
         <div class="set-grid" id="update-root"></div>
@@ -57,7 +64,7 @@
   <div id="toast" class="toast"></div>
 
   <div id="avatar" class="avatar shape-soft glow" role="button" tabindex="0" aria-label="Kohakuyasha: нажмите — чат, правая кнопка — личный кабинет, перетаскивайте куда угодно" title="ЛКМ — чат · ПКМ — личный кабинет · перетащите, чтобы переместить">
-    <img id="avatar-img" src="/static/avatar-small.png" alt="" draggable="false"><span class="avatar-dot"></span>
+    <img id="avatar-img" src="/static/avatar-small.png" alt="" draggable="false"><span class="avatar-dot"></span><span class="av-badge" id="avatar-badge" hidden></span>
   </div>
 
   <section id="chat-panel" class="float-panel chat" hidden aria-label="Чат">
@@ -73,6 +80,7 @@
     </header>
     <div class="chat-scroll" id="chat-scroll"><div id="chat-log" class="chat-log" aria-live="polite"></div></div>
     <button id="chat-down" class="chat-down" hidden aria-label="Вниз">↓</button>
+    <div id="chat-notices" class="notices" aria-live="polite"></div>
     <form id="chat-form" class="composer" autocomplete="off">
       <div class="composer-box">
         <textarea id="chat-input" rows="1" maxlength="4000" placeholder="Сообщение для Kohakuyasha…" aria-label="Сообщение"></textarea>
@@ -103,6 +111,7 @@
   <script src="/static/core.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/update.js"></script>
+  <script src="/static/disk.js"></script>
   <script src="/static/settings.js"></script>
   <script src="/static/avatar.js"></script>
   <script src="/static/panels.js"></script>

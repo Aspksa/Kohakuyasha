@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.8.2",
+  "current_version": "0.10.0",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "relaunch_fix_v0.8.2",
+  "completed_stage": "disk_module_v0.10.0",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "98/98 passed",
+      "linux": "119/119 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.8.2"
+    "note": "Run on PR for v0.9.0+v0.10.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -50,7 +50,8 @@
     "Fact extraction and summaries cost extra short provider requests (one per N user messages; configurable) and are verified with mocks and a local fake provider only.",
     "Retrieval is lexical (FTS5 + crude Russian stemming); semantic embeddings remain future work.",
     "After a rollback the SQLite schema stays at the newer version (older code ignores extra tables).",
-    "The Windows relaunch after an update is covered by unit tests and a real two-process lock-race test on Linux; confirm on physical Windows that the app comes back by itself after «Перезапустить сейчас»."
+    "The Windows relaunch after an update is covered by unit tests and a real two-process lock-race test on Linux; confirm on physical Windows that the app comes back by itself after «Перезапустить сейчас».",
+    "Диск Kohakuyasha: uploads/downloads verified on Linux and in Chromium only; file-name rules for Windows are enforced but not yet exercised on a real Windows drive."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -136,7 +137,17 @@
     "launcher_crash_log",
     "relaunch_log",
     "batch_files_crlf_on_update",
-    "update_page_waits_for_restart"
+    "update_page_waits_for_restart",
+    "notifications_store",
+    "avatar_badge_and_bubble",
+    "chat_notification_cards",
+    "update_announced_in_chat",
+    "tray_toast",
+    "background_update_watcher",
+    "disk_kohakuyasha_storage",
+    "disk_streaming_upload",
+    "disk_trash_restore",
+    "disk_safe_preview_and_download"
   ],
-  "next_action": "Merge v0.8.2 after green CI; on Windows start Kohakuyasha.bat manually once, then publish a later version and confirm Обновление → Обновить → Перезапустить сейчас returns to the UI by itself (logs/relaunch.log has the trace)."
+  "next_action": "Create PR (v0.9.0 notifications + v0.10.0 Диск Kohakuyasha) after user confirmation, then stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments (can use Koh.disk.upload)."
 }
