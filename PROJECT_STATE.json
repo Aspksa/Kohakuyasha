@@ -3,10 +3,10 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.10.0",
-  "status": "ready_for_physical_windows_validation",
-  "completed_stage": "disk_module_v0.10.0",
-  "current_branch": "ccr-ab76370c-uq936e",
+  "current_version": "0.12.0",
+  "status": "brain_v3_ci_pending",
+  "completed_stage": "brain_v3_implementation",
+  "current_branch": "feat/brain-v3",
   "last_update": "2026-10-07",
   "canonical_files": [
     "AGENTS.md",
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.9.0+v0.10.0"
+    "note": "PR #17 Brain v3 CI rerun after context-guidelines fix"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -149,5 +149,5 @@
     "disk_trash_restore",
     "disk_safe_preview_and_download"
   ],
-  "next_action": "Create PR (v0.9.0 notifications + v0.10.0 Диск Kohakuyasha) after user confirmation, then stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments (can use Koh.disk.upload)."
+  "next_action": "Merge PR #17 after Linux and Windows CI pass, then continue with Brain v4."
 }
