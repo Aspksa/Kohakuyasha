@@ -3,10 +3,10 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.8.2",
-  "status": "ready_for_physical_windows_validation",
-  "completed_stage": "relaunch_fix_v0.8.2",
-  "current_branch": "ccr-ab76370c-uq936e",
+  "current_version": "0.9.0",
+  "status": "brain_v2_ci_pending",
+  "completed_stage": "brain_v2_implementation",
+  "current_branch": "feat/brain-v2",
   "last_update": "2026-10-07",
   "canonical_files": [
     "AGENTS.md",
@@ -22,21 +22,21 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "98/98 passed",
+      "linux": "pending_ci",
       "windows": "pending_ci"
     },
     {
       "name": "python_compile",
-      "linux": "passed"
+      "linux": "pending_ci"
     },
     {
       "name": "javascript_syntax",
-      "linux": "passed"
+      "linux": "unchanged"
     }
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.8.2"
+    "note": "Run on PR for v0.9.0 Brain v2"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -138,5 +138,5 @@
     "batch_files_crlf_on_update",
     "update_page_waits_for_restart"
   ],
-  "next_action": "Merge v0.8.2 after green CI; on Windows start Kohakuyasha.bat manually once, then publish a later version and confirm Обновление → Обновить → Перезапустить сейчас returns to the UI by itself (logs/relaunch.log has the trace)."
+  "next_action": "Open the v0.9.0 Brain v2 PR, run Linux/Windows CI, fix any regressions, then mark task-016 completed."
 }
