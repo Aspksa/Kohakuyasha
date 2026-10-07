@@ -4,5 +4,9 @@
   "port": 8710,
   "open_browser": true,
   "minimize_to_tray": true,
-  "autostart": false
+  "autostart": false,
+  "event_limit": 5000,
+  "log_max_bytes": 2000000,
+  "log_backups": 5,
+  "database_backups": 10
 }

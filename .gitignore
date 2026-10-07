@@ -1,4 +1,5 @@
 .runtime/
+.kohakuyasha-id
 data/*
 !data/.gitkeep
 logs/*

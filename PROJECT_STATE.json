@@ -3,7 +3,7 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.1.0",
+  "current_version": "0.1.1",
   "status": "ready_for_windows_validation",
   "active_task_id": null,
   "last_update": "2026-10-07",
@@ -15,18 +15,28 @@
     "ERRORS.jsonl",
     "DECISIONS.md",
     "CHARACTER.json",
-    "VERSION"
+    "VERSION",
+    "PYTHON_VERSION"
   ],
   "implemented": [
     "portable_windows_bootstrap",
-    "automatic_python_download",
-    "isolated_runtime_dependencies",
+    "pinned_python_runtime",
+    "interpreter_bound_dependency_state",
+    "runtime_dev_dependency_separation",
+    "fully_pinned_runtime_dependencies",
     "single_instance_lock",
+    "stale_runtime_validation",
     "sqlite_database",
-    "database_backup_and_recovery",
+    "validated_database_backup_and_recovery",
+    "database_backup_rotation",
     "local_fastapi_web_ui",
+    "host_origin_session_security",
+    "protected_http_api",
+    "protected_websocket_events",
+    "security_response_headers",
     "system_tray",
-    "watchdog",
+    "watchdog_with_backoff",
+    "restart_port_reselection",
     "portable_windows_autostart",
     "live_event_stream",
     "system_telemetry",
@@ -36,10 +46,11 @@
     "russian_interface"
   ],
   "validation": {
-    "unit_tests": "8_passed",
+    "unit_and_security_tests": "17_passed",
     "python_compile": "passed",
-    "http_smoke_test": "passed",
-    "windows_bootstrap_and_tray": "pending_physical_windows_test"
+    "javascript_syntax": "passed",
+    "real_http_security_smoke": "passed",
+    "windows_bootstrap_tray_autostart": "pending_physical_windows_test"
   },
-  "next_action": "Run Kohakuyasha.bat on Windows and execute full diagnostics from the web UI."
+  "next_action": "Run Kohakuyasha.bat on Windows from a removable drive and execute full diagnostics."
 }

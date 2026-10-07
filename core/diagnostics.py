@@ -6,7 +6,7 @@ import sys
 import tempfile
 import time
 import urllib.request
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -52,20 +52,9 @@ class Diagnostics:
             self._run("Локальный порт", self._local_port),
         ]
         if mode == "full":
-            checks.extend(
-                [
-                    self._run("Интернет", self._internet),
-                    self._run("Свободное место", self._disk),
-                ]
-            )
+            checks.extend([self._run("Интернет", self._internet), self._run("Свободное место", self._disk)])
         passed = sum(1 for check in checks if check.ok)
-        return {
-            "mode": mode,
-            "passed": passed,
-            "total": len(checks),
-            "ok": passed == len(checks),
-            "checks": [check.as_dict() for check in checks],
-        }
+        return {"mode": mode, "passed": passed, "total": len(checks), "ok": passed == len(checks), "checks": [c.as_dict() for c in checks]}
 
     def _python(self) -> str:
         if sys.version_info < (3, 11):
@@ -73,7 +62,8 @@ class Diagnostics:
         return f"Python {sys.version.split()[0]}"
 
     def _sqlite(self) -> str:
-        self.db.initialize()
+        with self.db.connect() as conn:
+            conn.execute("SELECT 1").fetchone()
         return "SQLite доступна"
 
     def _integrity(self) -> str:

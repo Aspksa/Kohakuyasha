@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 3,
+  "next_id": 4,
   "tasks": [
     {
       "id": "task-001",
@@ -12,18 +12,29 @@
     },
     {
       "id": "task-002",
-      "title": "Validate v0.1.0 on physical Windows",
+      "title": "Validate Kohakuyasha v0.1.1 on physical Windows",
       "priority": 100,
       "status": "queued",
-      "depends_on": ["task-001"],
+      "depends_on": ["task-003"],
       "acceptance": [
         "Kohakuyasha.bat launches from a removable drive",
-        "Python is downloaded automatically when absent",
-        "tray icon and menu work",
-        "browser opens the local UI",
-        "full diagnostics pass",
-        "autostart survives a removable-drive letter change"
+        "Pinned portable Python downloads when no suitable system Python exists",
+        "Runtime dependencies install without pytest",
+        "Tray icon and asynchronous menu actions work",
+        "Browser opens the local UI and protected API works",
+        "Host/Origin/WebSocket protection rejects cross-origin requests",
+        "Full diagnostics pass",
+        "Autostart works with Cyrillic/spaced paths and survives drive-letter change",
+        "Restart succeeds repeatedly without watchdog loop"
       ]
+    },
+    {
+      "id": "task-003",
+      "title": "Security and reliability hardening v0.1.1",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": ["task-001"],
+      "result": "Closed browser-origin attack surface, hardened runtime/bootstrap/restart/database/config/tray/UI, separated dev tests and expanded automated coverage to 17 tests."
     }
   ]
 }

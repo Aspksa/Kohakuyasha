@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from datetime import datetime, timezone
 from typing import Any
 
 from .database import Database
@@ -36,16 +37,19 @@ class EventHub:
         event_type: str = "event",
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        created_at = datetime.now(timezone.utc).isoformat()
         event_id = self.db.add_event(
             message,
             level=level,
             source=source,
             event_type=event_type,
             payload=payload,
+            created_at=created_at,
         )
         getattr(self.logger, level.lower(), self.logger.info)("%s | %s | %s", source, event_type, message)
         event = {
             "id": event_id,
+            "created_at": created_at,
             "level": level,
             "source": source,
             "event_type": event_type,
@@ -60,8 +64,7 @@ class EventHub:
                     loop.call_soon_threadsafe(self._offer, queue, event)
                 except RuntimeError:
                     pass
-        if event_id % 100 == 0:
-            self.db.trim_events(self.limit)
+        self.db.trim_events(self.limit)
         return event
 
     def subscribe(self) -> tuple[asyncio.AbstractEventLoop, asyncio.Queue]:
