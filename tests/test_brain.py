@@ -56,6 +56,23 @@ def test_cognition_router_and_contextual_followups():
     assert "глубокий" in brain.cognition_block("Проанализируй код\n\nсравни два решения? Что проверить?")
 
 
+def test_working_memory_and_conflict_detection():
+    history = [
+        {"role": "user", "content": "Нужно отвечать коротко и без лишних вопросов"},
+        {"role": "assistant", "content": "Хорошо"},
+        {"role": "user", "content": "Сделай план архитектуры"},
+    ]
+    block = brain.working_memory_block("Сделай план архитектуры", history)
+    assert "Текущая цель" in block and "без лишних вопросов" in block
+    facts = [
+        {"text": "Любит кофе", "category": "preference"},
+        {"text": "Не любит кофе", "category": "preference"},
+        {"text": "Живёт в Казани", "category": "personal"},
+    ]
+    pairs = brain.memory_conflicts(facts)
+    assert len(pairs) == 1 and "кофе" in brain.format_conflicts(pairs).lower()
+
+
 def test_parse_facts_json_is_tolerant():
     good = '{"facts":[{"text":"Любит чай","category":"preference","importance":4},{"text":"x"},{"text":"Живёт в Казани","category":"zzz","importance":99}]}'
     out = brain.parse_facts_json(good)
@@ -163,7 +180,7 @@ def test_build_context_has_time_facts_and_summary(db: Database):
     assert "календар" not in text.lower() and len(used) == 1 and brain.GUIDELINES in text
     off = prefs.MemorySettings(use_facts=False, use_summary=False)
     blocks, used = brain.build_context(db, off, "кошка", now)
-    assert len(blocks) == 2 and used == []  # clock plus cognition mode
+    assert len(blocks) == 3 and used == []  # clock + cognition mode + working memory
 
 
 def test_memory_settings_are_clamped():

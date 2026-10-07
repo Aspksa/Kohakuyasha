@@ -3,10 +3,10 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.11.3",
-  "status": "ready_for_physical_windows_validation",
-  "completed_stage": "disk_empty_page_fix_v0.11.3",
-  "current_branch": "ccr-ab76370c-uq936e",
+  "current_version": "0.12.1",
+  "status": "brain_v3_ci_pending",
+  "completed_stage": "disk_fixes_v0.12.1",
+  "current_branch": "feat/brain-v3-main",
   "last_update": "2026-10-07",
   "canonical_files": [
     "AGENTS.md",
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.11.3"
+    "note": "Run on PR for v0.12.1"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -150,5 +150,5 @@
     "disk_safe_preview_and_download",
     "disk_design_pass"
   ],
-  "next_action": "Create PR for v0.11.3 on user request, then stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments."
+  "next_action": "Create PR/merge v0.12.1 on user request, then stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments."
 }
