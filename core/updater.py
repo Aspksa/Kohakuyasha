@@ -6,6 +6,7 @@ copied to .runtime/backups first, so an update can be rolled back from the UI.
 """
 from __future__ import annotations
 
+import base64
 import io
 import json
 import os
@@ -178,6 +179,13 @@ def _is_skipped(rel: str) -> bool:
     return any(rel.startswith(p) for p in SKIPPED) or rel.endswith("/")
 
 
+def _normalize(rel: str, content: bytes) -> bytes:
+    """cmd.exe needs CRLF in batch files; a zipball may carry the LF form that is stored in git."""
+    if rel.lower().endswith((".bat", ".cmd")):
+        return content.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+    return content
+
+
 def read_zip(blob: bytes) -> dict[str, bytes]:
     """Validated {relative path: content} for every file that should be installed."""
     try:
@@ -194,7 +202,7 @@ def read_zip(blob: bytes) -> dict[str, bytes]:
         rel = _safe_member(info.filename)
         if rel is None or _is_skipped(rel) or _is_protected(rel):
             continue
-        files[rel] = archive.read(info)
+        files[rel] = _normalize(rel, archive.read(info))
     missing = [r for r in REQUIRED if r not in files]
     if missing:
         raise UpdateError("В архиве нет обязательных файлов: " + ", ".join(missing))
@@ -324,14 +332,38 @@ def rollback(root: Path) -> dict[str, Any]:
 
 
 # ---------- relaunch ----------
+def relaunch_script(root: Path, pid: int) -> str:
+    """PowerShell that waits for this process to exit, then starts Kohakuyasha.bat again (errors go to logs/relaunch.log)."""
+    q = lambda p: str(p).replace("'", "''")  # noqa: E731 - single-quote escaping for PowerShell literals
+    root = Path(root).resolve()
+    return (
+        "try { "
+        f"Wait-Process -Id {int(pid)} -Timeout 40 -ErrorAction SilentlyContinue; "
+        "Start-Sleep -Seconds 1; "
+        "$env:KOHAKUYASHA_RELAUNCH = '1'; "
+        f"Start-Process -FilePath '{q(root / 'Kohakuyasha.bat')}' -WorkingDirectory '{q(root)}'; "
+        f"Add-Content -LiteralPath '{q(root / 'logs' / 'relaunch.log')}' -Value ((Get-Date -Format s) + ' started Kohakuyasha.bat') "
+        "} catch { "
+        f"Add-Content -LiteralPath '{q(root / 'logs' / 'relaunch.log')}' -Value ((Get-Date -Format s) + ' ERROR ' + $_.Exception.Message) "
+        "}"
+    )
+
+
 def relaunch(root: Path) -> bool:
-    """Start Kohakuyasha.bat again after a short delay (so this instance can release its lock). Windows only."""
+    """Start Kohakuyasha.bat again once this process has exited. Windows only; the new launcher also waits for the lock."""
     if os.name != "nt":
         return False
-    bat = Path(root).resolve() / "Kohakuyasha.bat"
-    if not bat.is_file():
+    root = Path(root).resolve()
+    if not (root / "Kohakuyasha.bat").is_file():
         return False
-    command = f"Start-Sleep -Seconds 3; Start-Process -FilePath '{str(bat).replace(chr(39), chr(39) * 2)}' -WorkingDirectory '{str(bat.parent).replace(chr(39), chr(39) * 2)}'"
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-    subprocess.Popen(["powershell.exe", "-NoLogo", "-NoProfile", "-WindowStyle", "Hidden", "-Command", command], creationflags=flags, close_fds=True)
+    log = root / "logs" / "relaunch.log"
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now():%Y-%m-%dT%H:%M:%S} relaunch scheduled (pid {os.getpid()})\n")
+    except OSError:
+        pass
+    encoded = base64.b64encode(relaunch_script(root, os.getpid()).encode("utf-16-le")).decode("ascii")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    subprocess.Popen(["powershell.exe", "-NoLogo", "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", encoded], creationflags=flags, close_fds=True)
     return True

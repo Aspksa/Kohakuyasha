@@ -35,7 +35,7 @@ def main() -> None:
         port = find_free_port(settings.host, settings.port)
         runtime = RuntimeState(paths, VERSION, port=port, status="Наблюдает", current_action="Консольный режим", watchdog_active=False)
         app = create_app(paths=paths, config=config, db=db, events=events, runtime=runtime)
-        server = uvicorn.Server(uvicorn.Config(app, host=settings.host, port=port, log_config=None, access_log=False))
+        server = uvicorn.Server(uvicorn.Config(app, host=settings.host, port=port, log_config=None, access_log=False, timeout_graceful_shutdown=2))
 
         def restart() -> None:
             restart_requested.set()

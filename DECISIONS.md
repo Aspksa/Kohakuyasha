@@ -130,3 +130,9 @@ The project updates itself from the configured GitHub repository (default Aspksa
 **Status:** Active
 
 `backdrop-filter` is banned in the UI: measurements showed it dominated frame time. Panels use opaque or high-opacity backgrounds; background glows are radial gradients. The clock and calendar (and the assistant's calendar context) were removed at the owner's request; the overview shows status, assistant and update cards.
+
+## D-023 — A relaunched instance waits for the lock
+**Date:** 2026-10-07
+**Status:** Active
+
+The launcher never gives up on a held single-instance lock immediately: it waits (up to 30 s) while the holder is not healthy, and exits as "already running" only when a serving, non-stopping instance exists (then it just opens the browser). This makes restart-after-update reliable regardless of how long the old process takes to exit. Diagnostics for failed starts live in `logs/launcher-crash.log` and `logs/relaunch.log`.

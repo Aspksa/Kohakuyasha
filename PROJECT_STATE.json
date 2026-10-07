@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.8.1",
+  "current_version": "0.8.2",
   "status": "ready_for_physical_windows_validation",
-  "completed_stage": "overview_decluttered_v0.8.1",
+  "completed_stage": "relaunch_fix_v0.8.2",
   "current_branch": "ccr-ab76370c-uq936e",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "91/91 passed",
+      "linux": "98/98 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.8.1"
+    "note": "Run on PR for v0.8.2"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -49,8 +49,8 @@
     "Cloud.ru calls are verified with mocks and a local fake server only, not with a real key.",
     "Fact extraction and summaries cost extra short provider requests (one per N user messages; configurable) and are verified with mocks and a local fake provider only.",
     "Retrieval is lexical (FTS5 + crude Russian stemming); semantic embeddings remain future work.",
-    "GitHub update was verified with unit tests and a local fake GitHub API only; the real api.github.com flow (and the Windows relaunch via PowerShell) still needs a physical test.",
-    "After a rollback the SQLite schema stays at the newer version (older code ignores extra tables)."
+    "After a rollback the SQLite schema stays at the newer version (older code ignores extra tables).",
+    "The Windows relaunch after an update is covered by unit tests and a real two-process lock-race test on Linux; confirm on physical Windows that the app comes back by itself after «Перезапустить сейчас»."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -130,7 +130,13 @@
     "update_page_and_badge",
     "private_repo_token",
     "backdrop_filter_removed",
-    "static_cache_revalidation"
+    "static_cache_revalidation",
+    "relaunch_waits_for_instance_lock",
+    "relaunch_waits_for_old_pid",
+    "launcher_crash_log",
+    "relaunch_log",
+    "batch_files_crlf_on_update",
+    "update_page_waits_for_restart"
   ],
-  "next_action": "Merge v0.8.1 after green Windows+Linux CI; verify smoothness and the Обновление page against the real GitHub repository on Windows."
+  "next_action": "Merge v0.8.2 after green CI; on Windows start Kohakuyasha.bat manually once, then publish a later version and confirm Обновление → Обновить → Перезапустить сейчас returns to the UI by itself (logs/relaunch.log has the trace)."
 }

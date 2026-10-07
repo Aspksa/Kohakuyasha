@@ -21,52 +21,13 @@ from core.config import ConfigStore, Paths
 from core.database import Database
 from core.diagnostics import Diagnostics
 from core.events import EventHub
+from core.instance import InstanceLock, acquire_or_wait
 from core.logging_setup import setup_logging
 from core.runtime import RuntimeState, find_free_port, port_is_open
 from core.tray import TrayController
 
 ROOT = Path(__file__).resolve().parent
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
-
-
-class InstanceLock:
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.handle = None
-
-    def acquire(self) -> bool:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.handle = open(self.path, "a+b")
-        if self.path.stat().st_size == 0:
-            self.handle.write(b"0")
-            self.handle.flush()
-        try:
-            if os.name == "nt":
-                import msvcrt
-                self.handle.seek(0)
-                msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return True
-        except (OSError, IOError):
-            return False
-
-    def release(self) -> None:
-        if not self.handle:
-            return
-        try:
-            if os.name == "nt":
-                import msvcrt
-                self.handle.seek(0)
-                msvcrt.locking(self.handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
-        self.handle.close()
-        self.handle = None
 
 
 class Supervisor:
@@ -115,6 +76,7 @@ class Supervisor:
             port=self.port,
             log_config=None,
             access_log=False,
+            timeout_graceful_shutdown=2,  # do not wait for idle browser connections: a relaunch must not hang
         )
         return uvicorn.Server(cfg)
 
@@ -185,6 +147,9 @@ class Supervisor:
         if self.tray:
             self.tray.stop()
         self.runtime.clear_persisted()
+        hard_exit = threading.Timer(15, lambda: os._exit(0))  # last resort so the lock is always released
+        hard_exit.daemon = True
+        hard_exit.start()
 
     def quick_test(self) -> None:
         try:
@@ -245,8 +210,10 @@ def main() -> int:
     paths = Paths(ROOT)
     paths.ensure()
     lock = InstanceLock(paths.lock)
-    if not lock.acquire():
-        open_existing(paths)
+    state = acquire_or_wait(lock, paths)
+    if state != "acquired":
+        if state == "running":
+            open_existing(paths)  # a healthy instance is already serving: just show it
         return 0
     try:
         Supervisor(safe_mode="--safe" in sys.argv).run()
@@ -256,5 +223,23 @@ def main() -> int:
         lock.release()
 
 
+def run() -> int:
+    """pythonw has no console, so write any startup crash to logs/launcher-crash.log."""
+    try:
+        return main()
+    except SystemExit:
+        raise
+    except BaseException:
+        import traceback
+        try:
+            log = ROOT / "logs" / "launcher-crash.log"
+            log.parent.mkdir(parents=True, exist_ok=True)
+            with open(log, "a", encoding="utf-8") as f:
+                f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} v{VERSION}\n{traceback.format_exc()}\n")
+        except OSError:
+            pass
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run())
