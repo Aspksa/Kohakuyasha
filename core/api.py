@@ -3,13 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+from dataclasses import asdict
 from typing import Any
 
 from fastapi import Body, FastAPI, Header, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import assistant, autostart
+from . import ai, assistant, autostart
 from .config import ConfigStore, Paths
 from .database import Database
 from .diagnostics import Diagnostics
@@ -22,6 +23,20 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     app = FastAPI(title="Kohakuyasha", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=paths.static), name="static")
     diagnostics_lock = asyncio.Lock()
+    secrets = ai.SecretStore(paths.secrets)
+
+    def load_character() -> dict:
+        try:
+            data = json.loads(paths.character.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def ai_settings() -> ai.AISettings:
+        return ai.validate_ai(db.get_setting("ai"))
+
+    def avatar_settings() -> ai.AvatarSettings:
+        return ai.validate_avatar(db.get_setting("avatar"))
 
     def security_headers(response: Response) -> Response:
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -95,21 +110,69 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
 
     @app.get("/api/character")
     async def character():
-        def load() -> dict:
-            try:
-                data = json.loads(paths.character.read_text(encoding="utf-8"))
-                if not isinstance(data, dict):
-                    data = {}
-            except (OSError, ValueError):
-                data = {}
-            return data
-
-        profile, messages = await asyncio.gather(asyncio.to_thread(load), asyncio.to_thread(db.chat_count))
+        profile, messages = await asyncio.gather(asyncio.to_thread(load_character), asyncio.to_thread(db.chat_count))
         return {"character": profile, "stats": {"messages": messages}}
+
+    @app.get("/api/settings")
+    async def get_settings():
+        def build() -> dict:
+            return {"avatar": asdict(avatar_settings()), "ai": ai.public_ai(ai_settings(), secrets)}
+
+        return await asyncio.to_thread(build)
+
+    @app.put("/api/settings/avatar")
+    async def put_avatar(payload: dict[str, Any] = Body(...)):
+        settings = ai.validate_avatar(payload)
+        await asyncio.to_thread(db.set_setting, "avatar", asdict(settings))
+        return asdict(settings)
+
+    @app.put("/api/settings/ai")
+    async def put_ai(payload: dict[str, Any] = Body(...)):
+        settings = ai.validate_ai(payload)
+        await asyncio.to_thread(db.set_setting, "ai", asdict(settings))
+        events.emit("Настройки ИИ обновлены", event_type="settings", payload={"provider": settings.provider})
+        return await asyncio.to_thread(ai.public_ai, settings, secrets)
+
+    @app.put("/api/ai/key")
+    async def put_key(payload: dict[str, Any] = Body(...)):
+        key = payload.get("key")
+        try:
+            if not isinstance(key, str):
+                raise ValueError
+            await asyncio.to_thread(secrets.set_key, key)
+        except ValueError:
+            return JSONResponse({"detail": "Некорректный ключ."}, status_code=400)
+        events.emit("API-ключ ИИ сохранён", event_type="settings")
+        return {"has_key": True, "key_hint": secrets.hint()}
+
+    @app.delete("/api/ai/key")
+    async def delete_key():
+        await asyncio.to_thread(secrets.delete_key)
+        events.emit("API-ключ ИИ удалён", event_type="settings")
+        return {"has_key": False, "key_hint": ""}
+
+    @app.post("/api/ai/test")
+    async def test_ai():
+        settings = await asyncio.to_thread(ai_settings)
+        if settings.provider == "none":
+            return JSONResponse({"ok": False, "detail": "ИИ-провайдер не выбран."}, status_code=200)
+        try:
+            text = await asyncio.to_thread(
+                ai.complete, settings, secrets.get_key(), "", [{"role": "user", "content": "Ответь одним словом: готова?"}]
+            )
+        except ai.AIError as exc:
+            return {"ok": False, "detail": str(exc)}
+        return {"ok": True, "detail": text[:200]}
 
     @app.get("/api/chat")
     async def chat_history(limit: int = 100):
         return {"messages": await asyncio.to_thread(db.recent_chat, limit)}
+
+    @app.delete("/api/chat")
+    async def chat_clear():
+        removed = await asyncio.to_thread(db.clear_chat)
+        events.emit("История чата очищена", event_type="chat", payload={"removed": removed})
+        return {"removed": removed}
 
     @app.post("/api/chat")
     async def chat_send(payload: dict[str, Any] = Body(...)):
@@ -120,7 +183,14 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         if len(text) > 4000:
             return JSONResponse({"detail": "Сообщение длиннее 4000 символов."}, status_code=413)
         user_message = await asyncio.to_thread(db.add_chat_message, "user", text)
-        answer = await asyncio.to_thread(assistant.reply, text)
+        settings = await asyncio.to_thread(ai_settings)
+        history = await asyncio.to_thread(db.recent_chat, 60)
+        try:
+            answer = await asyncio.to_thread(
+                assistant.reply, settings, secrets.get_key(), await asyncio.to_thread(load_character), history
+            )
+        except ai.AIError as exc:
+            return {"messages": [user_message], "error": str(exc)}
         assistant_message = await asyncio.to_thread(db.add_chat_message, "assistant", answer)
         return {"messages": [user_message, assistant_message]}
 

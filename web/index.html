@@ -77,19 +77,52 @@
     </main>
   </div>
   <div id="toast" class="toast"></div>
-  <div id="avatar" class="avatar" role="button" tabindex="0" aria-label="Kohakuyasha: нажмите — чат, правая кнопка — личный кабинет, перетаскивайте куда угодно" title="ЛКМ — чат · ПКМ — личный кабинет · перетащите, чтобы переместить">
-    <img src="/static/avatar-small.png" alt="" draggable="false"><span class="avatar-dot"></span>
+  <div id="avatar" class="avatar shape-soft glow" role="button" tabindex="0" aria-label="Kohakuyasha: нажмите — чат, правая кнопка — личный кабинет, перетаскивайте куда угодно" title="ЛКМ — чат · ПКМ — личный кабинет · перетащите, чтобы переместить">
+    <img id="avatar-img" src="/static/avatar-small.png" alt="" draggable="false"><span class="avatar-dot"></span>
   </div>
-  <section id="chat-panel" class="float-panel" hidden aria-label="Чат">
-    <header class="fp-head"><div><b class="fp-name">Kohakuyasha</b><span>чат</span></div><button class="fp-close" data-close aria-label="Закрыть">×</button></header>
-    <div id="chat-log" class="chat-log" aria-live="polite"></div>
-    <form id="chat-form" class="chat-form" autocomplete="off"><input id="chat-input" maxlength="4000" placeholder="Напишите сообщение…" aria-label="Сообщение"><button class="primary" type="submit">Отправить</button></form>
+
+  <section id="chat-panel" class="float-panel chat" hidden aria-label="Чат">
+    <header class="fp-head">
+      <img class="fp-ava" src="/static/avatar-small.png" alt="">
+      <div class="fp-title"><b>Kohakuyasha</b><span id="chat-status"><i class="dot"></i>загрузка…</span></div>
+      <div class="fp-actions">
+        <button class="fp-btn" data-act="new" title="Новый чат" aria-label="Новый чат">＋</button>
+        <button class="fp-btn" data-act="max" title="Развернуть" aria-label="Развернуть">⤢</button>
+        <button class="fp-btn" data-close title="Закрыть" aria-label="Закрыть">×</button>
+      </div>
+    </header>
+    <div class="chat-scroll" id="chat-scroll"><div id="chat-log" class="chat-log" aria-live="polite"></div></div>
+    <button id="chat-down" class="chat-down" hidden aria-label="Вниз">↓</button>
+    <form id="chat-form" class="composer" autocomplete="off">
+      <div class="composer-box">
+        <textarea id="chat-input" rows="1" maxlength="4000" placeholder="Сообщение для Kohakuyasha…" aria-label="Сообщение"></textarea>
+        <button type="submit" id="chat-send" class="send" disabled aria-label="Отправить">↑</button>
+      </div>
+      <p class="composer-hint">Enter — отправить · Shift+Enter — новая строка</p>
+    </form>
   </section>
+
   <section id="cabinet-panel" class="float-panel cabinet" hidden aria-label="Личный кабинет ИИ">
-    <header class="fp-head"><div><b class="fp-name">Kohakuyasha</b><span>личный кабинет</span></div><button class="fp-close" data-close aria-label="Закрыть">×</button></header>
+    <header class="fp-head">
+      <img class="fp-ava" src="/static/avatar-small.png" alt="">
+      <div class="fp-title"><b>Kohakuyasha</b><span>личный кабинет</span></div>
+      <div class="fp-actions">
+        <button class="fp-btn" data-act="max" title="Развернуть" aria-label="Развернуть">⤢</button>
+        <button class="fp-btn" data-close title="Закрыть" aria-label="Закрыть">×</button>
+      </div>
+    </header>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" role="tab" data-tab="profile">Профиль</button>
+      <button class="tab" role="tab" data-tab="avatar">Аватар</button>
+      <button class="tab" role="tab" data-tab="ai">ИИ</button>
+      <button class="tab" role="tab" data-tab="system">Система</button>
+    </nav>
     <div id="cabinet-body" class="cabinet-body"></div>
   </section>
+
   <script src="/static/app.js"></script>
   <script src="/static/avatar.js"></script>
+  <script src="/static/chat.js"></script>
+  <script src="/static/cabinet.js"></script>
 </body>
 </html>

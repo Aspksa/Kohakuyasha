@@ -64,3 +64,15 @@ Portable Python is pinned by `PYTHON_VERSION`. Python package versions are exact
 **Status:** Active
 
 Every change targeting the Windows runtime must pass the GitHub Actions Windows job before merge. The CI also runs on Linux to catch portability regressions. Python is selected from `PYTHON_VERSION`; Windows PowerShell scripts are parsed by Windows PowerShell 5.1. Physical tray/removable-drive/autostart behavior still requires a real Windows integration check.
+
+## D-012 — AI API key is stored locally, never returned
+**Date:** 2026-10-07
+**Status:** Active
+
+The provider API key is written only to `data/secrets.json` (git-ignored, chmod 600 where supported). The HTTP API exposes only `has_key` and the last four characters; the key is never logged or echoed in provider error text. Non-secret AI and avatar settings live in the SQLite `app_settings` table. Windows DPAPI encryption is a possible later hardening.
+
+## D-013 — Avatar is a global floating widget
+**Date:** 2026-10-07
+**Status:** Active
+
+The avatar is shown on every page/module, draggable, with persisted per-browser position. Left click opens chat, right click (or touch long-press) opens the personal cabinet. Default appearance is face-only with soft edges (no circle); crop, shape, size, ring, glow and status dot are user settings. Chat text is untrusted and rendered only via DOM nodes (no innerHTML) under the strict CSP.

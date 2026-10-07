@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 8,
+  "next_id": 9,
   "tasks": [
     {
       "id": "task-001",
@@ -72,18 +72,28 @@
     },
     {
       "id": "task-007",
-      "title": "Connect AI provider and memory to chat",
+      "title": "AI memory: extract facts from chat into SQLite and manage them in the cabinet",
       "priority": 90,
       "status": "queued",
       "depends_on": [
         "task-006"
       ],
       "acceptance": [
-        "API key stored locally outside git",
-        "assistant.reply calls provider",
-        "facts extracted into SQLite memory",
-        "memory page in cabinet with edit/delete"
+        "facts extracted after conversations",
+        "facts injected into the system prompt",
+        "memory tab in cabinet with edit/delete",
+        "memory can be disabled"
       ]
+    },
+    {
+      "id": "task-008",
+      "title": "Chat UI, cabinet tabs, avatar visualization and AI settings v0.3.0",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [
+        "task-006"
+      ],
+      "result": "ChatGPT-style chat, cabinet (Profile/Avatar/AI/System), face-only avatar with shape options, provider settings with local key store and working Anthropic/OpenAI-compatible calls."
     }
   ]
 }
