@@ -73,6 +73,28 @@ def test_working_memory_and_conflict_detection():
     assert len(pairs) == 1 and "кофе" in brain.format_conflicts(pairs).lower()
 
 
+def test_brain_v4_planner_continuity_and_stale_fact_replacement(db: Database):
+    deep = brain.planning_block("Проанализируй архитектуру, сравни два варианта и объясни почему? Что проверить?")
+    assert "planner" in deep.lower() and "уверенности" in deep.lower()
+    assert brain.planning_block("привет") == ""
+
+    history = [
+        {"role": "user", "content": "Сделай аудит архитектуры"},
+        {"role": "assistant", "content": "Проверил API и память. Осталось проверить updater и тесты."},
+    ]
+    block = brain.working_memory_block("продолжай", history)
+    assert "Осталось проверить updater" in block
+    assert "не начинай задачу заново" in block
+
+    db.add_fact("Любит кофе", "preference", 3, "auto")
+    added, updated = brain.store_facts(
+        db, [{"text": "Не любит кофе", "category": "preference", "importance": 4}]
+    )
+    assert (added, updated) == (0, 1)
+    facts = db.list_facts()
+    assert len(facts) == 1 and facts[0]["text"] == "Не любит кофе" and facts[0]["importance"] == 4
+
+
 def test_parse_facts_json_is_tolerant():
     good = '{"facts":[{"text":"Любит чай","category":"preference","importance":4},{"text":"x"},{"text":"Живёт в Казани","category":"zzz","importance":99}]}'
     out = brain.parse_facts_json(good)

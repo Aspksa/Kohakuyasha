@@ -77,21 +77,46 @@ CONSTRAINT_MARKERS = (
     "must", "need", "only", "without", "never", "do not", "don't", "minimum", "maximum",
 )
 NEGATION_MARKERS = ("не ", "нет ", "никогда", "перестал", "перестала", "не любит", "не хочет")
+CONTINUATION_MARKERS = (
+    "дальше", "продолж", "делай", "делай дальше", "продолжай", "исправь", "доделай", "ещё", "теперь",
+    "continue", "go on", "keep going", "fix it", "finish",
+)
+EPISTEMIC_POLICY = (
+    "Проверка уверенности: перед финальным ответом молча отдели подтверждённое от вывода и неизвестного. "
+    "Не маскируй предположение под факт. Если неизвестность влияет на решение, обозначь её кратко и укажи, "
+    "что именно нужно проверить; если не влияет — не добавляй лишних оговорок."
+)
+PLANNER_DEEP = (
+    "Внутренний planner для сложной задачи: молча сформулируй конечный результат, перечисли ограничения, "
+    "разбей работу на зависимые шаги, проверь каждый шаг и только затем формируй ответ. "
+    "Не показывай скрытый план или цепочку рассуждений; пользователю показывай только полезный результат, "
+    "ключевые основания и необходимые действия."
+)
 
 
-def working_memory_block(query: str, history: list[dict[str, Any]] | None = None, limit_chars: int = 1400) -> str:
-    """Keep the current goal and recent explicit constraints visible without another model call."""
+def is_continuation(query: str) -> bool:
+    text = (query or "").strip().lower()
+    return bool(text) and any(marker in text for marker in CONTINUATION_MARKERS)
+
+
+def working_memory_block(query: str, history: list[dict[str, Any]] | None = None, limit_chars: int = 1800) -> str:
+    """Keep current goal, constraints and recent task state visible without another model call."""
     current = (query or "").strip()
     if not current:
         return ""
     lines = [f"Текущая цель пользователя: {current[:700]}"]
     seen = {current}
     constraints: list[str] = []
+    recent_assistant = ""
     for item in reversed(history or []):
-        if item.get("role") != "user":
-            continue
+        role = item.get("role")
         text = str(item.get("content") or "").strip()
-        if not text or text in seen:
+        if not text:
+            continue
+        if role == "assistant" and not recent_assistant:
+            recent_assistant = text[:650]
+            continue
+        if role != "user" or text in seen:
             continue
         seen.add(text)
         low = text.lower()
@@ -102,7 +127,17 @@ def working_memory_block(query: str, history: list[dict[str, Any]] | None = None
     if constraints:
         lines.append("Актуальные ограничения из недавних сообщений:")
         lines.extend(f"- {x}" for x in reversed(constraints))
+    if is_continuation(current) and recent_assistant:
+        lines.append("Последнее состояние незавершённой задачи из предыдущего ответа:")
+        lines.append(recent_assistant)
+        lines.append("Продолжай от этого состояния; не начинай задачу заново без причины.")
     return "\n".join(lines)[:limit_chars]
+
+
+def planning_block(query: str) -> str:
+    if reasoning_mode(query) != "deep":
+        return ""
+    return PLANNER_DEEP + " " + EPISTEMIC_POLICY
 
 
 def _strip_negation(text: str) -> str:
@@ -257,6 +292,9 @@ def build_context(
     now = now or datetime.now()
     expanded_query = contextual_query(query, history)
     blocks = [format_now(now), cognition_block(query)]
+    planner = planning_block(query)
+    if planner:
+        blocks.append(planner)
     working = working_memory_block(query, history)
     if working:
         blocks.append(working)
@@ -356,21 +394,46 @@ def extract_facts(settings: ai.AISettings, key: str, messages: list[dict[str, An
     return parse_facts_json(answer)
 
 
+def _has_negation(text: str) -> bool:
+    low = (text or "").lower()
+    return any(marker in low for marker in NEGATION_MARKERS)
+
+
+def _fact_match_score(existing: dict[str, Any], incoming: dict[str, Any]) -> tuple[float, bool]:
+    a, b = str(existing.get("text", "")), str(incoming.get("text", ""))
+    normal = similarity(a, b)
+    opposite = (
+        existing.get("category") == incoming.get("category")
+        and _has_negation(a) != _has_negation(b)
+        and similarity(_strip_negation(a), _strip_negation(b)) >= 0.6
+    )
+    core = similarity(_strip_negation(a), _strip_negation(b)) if opposite else 0.0
+    return max(normal, core), opposite
+
+
 def store_facts(db: Database, facts: list[dict[str, Any]], source: str = "auto") -> tuple[int, int]:
-    """Insert new facts; near-duplicates (token overlap >= 0.6) refresh the existing fact instead."""
+    """Merge duplicates and replace stale contradictory auto-facts with the newer user fact."""
     existing = db.list_facts(MAX_FACTS)
     added = updated = 0
     for f in facts:
-        match = max(existing, key=lambda e: similarity(e["text"], f["text"]), default=None)
-        if match is not None and similarity(match["text"], f["text"]) >= 0.6:
+        scored = [(*_fact_match_score(e, f), e) for e in existing]
+        score, opposite, match = max(scored, key=lambda item: item[0], default=(0.0, False, None))
+        if match is not None and score >= 0.6:
             changes: dict[str, Any] = {"importance": max(match["importance"], f["importance"])}
-            if len(f["text"]) > len(match["text"]) and not match["pinned"] and match["source"] == "auto":
+            replace_stale = opposite and not match["pinned"] and match["source"] == "auto"
+            enrich_duplicate = len(f["text"]) > len(match["text"]) and not match["pinned"] and match["source"] == "auto"
+            if replace_stale or enrich_duplicate:
                 changes["text"] = f["text"]
+                changes["category"] = f["category"]
             db.update_fact(match["id"], **changes)
+            match.update(changes)
             updated += 1
         else:
             fid = db.add_fact(f["text"], f["category"], f["importance"], source)
-            existing.append({"id": fid, "text": f["text"], "importance": f["importance"], "pinned": False, "source": source})
+            existing.append({
+                "id": fid, "text": f["text"], "category": f["category"], "importance": f["importance"],
+                "pinned": False, "source": source,
+            })
             added += 1
     db.trim_facts(MAX_FACTS)
     return added, updated

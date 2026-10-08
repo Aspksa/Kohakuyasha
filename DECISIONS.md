@@ -161,3 +161,9 @@ Kohakuyasha classifies each user turn locally as fast or deep. Fast turns remain
 
 Each turn gets a compact working-memory block containing the current user goal and recent explicit constraints. This is assembled locally and does not require another model request. Selected long-term facts are also checked for likely contradictions; conflicting facts are marked in context so the assistant does not silently merge incompatible memories and instead prefers the user's newer statement or asks only when ambiguity materially blocks the task.
 
+## D-028 — Deep tasks use a local planner and stale auto-facts are replaceable
+**Date:** 2026-10-07
+**Status:** Active
+
+Deep turns receive a local planning and epistemic-confidence policy inside the prompt, so simple turns stay fast and no extra planning API request is added. Short continuation commands include the latest assistant task state in working memory so multi-turn work resumes instead of restarting. When a new automatically extracted fact contradicts an older unpinned automatic fact with the same semantic core, the newer user information replaces the stale fact; pinned or manual facts are never silently overwritten.
+
