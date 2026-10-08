@@ -14,7 +14,7 @@ from fastapi import Body, FastAPI, Header, Request, WebSocket, WebSocketDisconne
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, assistant, autostart, brain, disk as disk_mod, media, memory, notifier as notifier_mod, prefs, updater
+from . import ai, assistant, autostart, brain, disk as disk_mod, juunibi as juunibi_mod, media, memory, notifier as notifier_mod, prefs, updater
 from .config import ConfigStore, Paths
 from .database import Database
 from .diagnostics import Diagnostics
@@ -31,8 +31,14 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
     app.state.run_background = lambda fn: threading.Thread(target=fn, daemon=True, name="kohakuyasha-memory").start()
     secrets = ai.SecretStore(paths.secrets)
     notifier = notifier_mod.Notifier(db, runtime, events)
+    juunibi = juunibi_mod.Engine(db, juunibi_mod.Library(paths.root / "content" / "juunibi"))
+
+    def juunibi_settings() -> juunibi_mod.JuunibiSettings:
+        return juunibi_mod.validate_settings(db.get_setting("juunibi"))
 
     def load_character() -> dict:
+        if juunibi_settings().persona and juunibi.library.character:
+            return juunibi.library.persona()
         try:
             data = json.loads(paths.character.read_text(encoding="utf-8"))
             return data if isinstance(data, dict) else {}
@@ -86,6 +92,7 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         return {
             "avatar": asdict(avatar), "faces": all_faces(), "ai": ai.public_ai(ai_settings(), secrets),
             "app": app_cfg, "memory": asdict(memory_settings()),
+            "juunibi": {**asdict(juunibi_settings()), "available": juunibi.library.available},
         }
 
     def security_headers(response: Response, path: str = "") -> Response:
@@ -771,6 +778,62 @@ def create_app(*, paths: Paths, config: ConfigStore, db: Database, events: Event
         if not (inline_type or "").startswith("application/pdf"):  # the PDF viewer does not work under a sandbox CSP
             response.headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
         return response
+
+    # ---------- JUUNIBI ----------
+    @app.get("/api/juunibi")
+    async def juunibi_info():
+        def run() -> dict:
+            return {"settings": asdict(juunibi_settings()), "stats": juunibi.stats(), "ai_ready": ai_settings().provider != "none" and secrets.has_key()}
+        return await asyncio.to_thread(run)
+
+    @app.put("/api/settings/juunibi")
+    async def put_juunibi(payload: dict[str, Any] = Body(...)):
+        await asyncio.to_thread(db.set_setting, "juunibi", asdict(juunibi_mod.validate_settings(payload)))
+        return await asyncio.to_thread(all_settings)
+
+    @app.post("/api/juunibi/action")
+    async def juunibi_action(payload: dict[str, Any] = Body(default={})):
+        cfg = await asyncio.to_thread(juunibi_settings)
+        if not cfg.actions:
+            return {"action": None, "reason": "disabled"}
+        category = payload.get("category") if isinstance(payload.get("category"), str) else None
+        context = payload.get("context") if isinstance(payload.get("context"), str) else ""
+        try:
+            action = await asyncio.to_thread(juunibi.next_action, ai_settings(), secrets.get_key(), category, cfg.generate, context)
+        except juunibi_mod.JuunibiError as exc:
+            return {"action": None, "reason": str(exc)}
+        return {"action": action}
+
+    @app.post("/api/juunibi/generate-action")
+    async def juunibi_generate(payload: dict[str, Any] = Body(default={})):
+        """Create one NEW validated action with the provider (the key never leaves the server)."""
+        category = payload.get("category") if isinstance(payload.get("category"), str) else None
+        context = payload.get("context") if isinstance(payload.get("context"), str) else ""
+        try:
+            item = await asyncio.to_thread(juunibi.generate_action, ai_settings(), secrets.get_key(), category, context)
+        except juunibi_mod.JuunibiError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=502)
+        events.emit("JUUNIBI: добавлено новое действие", event_type="juunibi")
+        return {"action": item, "stats": await asyncio.to_thread(juunibi.stats)}
+
+    @app.post("/api/juunibi/phrase")
+    async def juunibi_phrase(payload: dict[str, Any] = Body(default={})):
+        cfg = await asyncio.to_thread(juunibi_settings)
+        category = payload.get("category") if isinstance(payload.get("category"), str) else None
+        if not cfg.phrases or (category == "ambient" and not cfg.ambient):
+            return {"phrase": None, "reason": "disabled"}
+        try:
+            return {"phrase": await asyncio.to_thread(juunibi.next_phrase, category)}
+        except juunibi_mod.JuunibiError as exc:
+            return {"phrase": None, "reason": str(exc)}
+
+    @app.post("/api/juunibi/reset")
+    async def juunibi_reset(payload: dict[str, Any] = Body(...)):
+        scope = payload.get("scope")
+        if scope not in ("actions", "phrases", "all"):
+            return JSONResponse({"detail": "Неизвестная область сброса."}, status_code=400)
+        await asyncio.to_thread(juunibi.reset, scope)
+        return {"stats": await asyncio.to_thread(juunibi.stats)}
 
     @app.get("/api/events")
     async def recent_events(limit: int = 80):

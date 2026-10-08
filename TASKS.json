@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "next_id": 22,
+  "next_id": 23,
   "tasks": [
     {
       "id": "task-001",
@@ -251,6 +251,14 @@
         "new contradictory auto-facts replace stale auto-facts",
         "Linux and Windows CI pass"
       ]
+    },
+    {
+      "id": "task-022",
+      "title": "v0.15.0: JUUNIBI integration (actions, phrases, generation, avatar)",
+      "priority": 100,
+      "status": "completed",
+      "depends_on": [],
+      "result": "See CHANGELOG change-0027."
     }
   ]
 }

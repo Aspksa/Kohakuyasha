@@ -536,3 +536,64 @@ def test_disk_api_end_to_end(tmp_path: Path):
     assert big.status_code == 413
     assert not [p for p in (tmp_path / "data" / "disk" / "files").rglob("*.part")]
     assert client.get("/api/disk").json()["usage"]["files"] >= 2
+
+
+def juunibi_client(tmp_path: Path):
+    import shutil
+    shutil.copytree(Path(__file__).resolve().parents[1] / "content", tmp_path / "content")
+    return make_client(tmp_path)
+
+
+def test_juunibi_api_actions_phrases_settings_and_persona(monkeypatch, tmp_path: Path):
+    from core import ai
+    client, db, runtime = juunibi_client(tmp_path)
+    establish_session(client)
+    info = client.get("/api/juunibi").json()
+    assert info["stats"]["actions_total"] == 365 and info["stats"]["phrases_total"] == 452 and info["ai_ready"] is False
+    assert client.post("/api/juunibi/action", json={}).status_code == 403  # needs the same-origin marker
+    a = client.post("/api/juunibi/action", headers=ACTION, json={}).json()["action"]
+    assert a["id"].startswith("JUA-") and a["text"].startswith("*") and a["duration_seconds"] >= 3
+    b = client.post("/api/juunibi/action", headers=ACTION, json={"category": "защита"}).json()["action"]
+    assert b["category"] == "защита" and b["id"] != a["id"]
+    p = client.post("/api/juunibi/phrase", headers=ACTION, json={"category": "auto"}).json()["phrase"]
+    assert p["id"].startswith("JUN-")
+    assert client.post("/api/juunibi/phrase", headers=ACTION, json={"category": "ambient"}).json()["phrase"] is None  # ambient is off by default
+    assert client.get("/api/settings").json()["juunibi"] == {"actions": True, "phrases": True, "ambient": False, "generate": True, "persona": False, "available": True}
+
+    client.put("/api/settings/juunibi", headers=ACTION, json={"actions": False, "ambient": True, "persona": True})
+    assert client.post("/api/juunibi/action", headers=ACTION, json={}).json() == {"action": None, "reason": "disabled"}
+    assert client.post("/api/juunibi/phrase", headers=ACTION, json={"category": "ambient"}).json()["phrase"]["category"]
+    assert client.get("/api/character").json()["character"]["name"] == "JUUNIBI"  # persona replaces CHARACTER.json in prompts
+    client.put("/api/settings/juunibi", headers=ACTION, json={"persona": False})
+    assert client.get("/api/character").json()["character"].get("name") != "JUUNIBI"
+
+    assert client.post("/api/juunibi/reset", headers=ACTION, json={"scope": "x"}).status_code == 400
+    assert client.post("/api/juunibi/reset", headers=ACTION, json={"scope": "all"}).json()["stats"]["actions_used"] == 0
+
+
+def test_juunibi_generate_endpoint_uses_server_side_key(monkeypatch, tmp_path: Path):
+    from core import ai
+    client, db, runtime = juunibi_client(tmp_path)
+    establish_session(client)
+    assert client.post("/api/juunibi/generate-action", headers=ACTION, json={}).status_code == 502  # no key yet
+    connect_ai(client)
+    seen = {}
+
+    def fake(settings, key, system, messages):
+        seen["key"] = key
+        return json.dumps({"text": "*Из тени колонны выскальзывает тонкий лунный луч и ложится к её ногам, словно послушный зверёк. Она наклоняет голову, ушки дрожат от любопытства, а хвосты расправляются полукругом.*", "category": "лунное сияние", "emotion": "любопытство", "duration_seconds": 5}, ensure_ascii=False)
+
+    monkeypatch.setattr(ai, "complete", fake)
+    r = client.post("/api/juunibi/generate-action", headers=ACTION, json={"category": "лунное сияние"})
+    assert r.status_code == 200 and r.json()["action"]["id"].startswith("JUA-GEN-") and r.json()["stats"]["generated"] == 1 and seen["key"] == "sk-test-12345678"
+    assert "sk-test" not in r.text and "sk-test" not in client.get("/api/juunibi").text
+    assert client.get("/api/juunibi").json()["ai_ready"] is True
+
+
+def test_juunibi_missing_content_degrades_gracefully(tmp_path: Path):
+    client, db, runtime = make_client(tmp_path)  # no content folder
+    establish_session(client)
+    assert client.get("/api/juunibi").json()["stats"]["available"] is False
+    r = client.post("/api/juunibi/action", headers=ACTION, json={}).json()
+    assert r["action"] is None and "не найдены" in r["reason"]
+    assert client.get("/api/settings").json()["juunibi"]["available"] is False

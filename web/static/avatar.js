@@ -101,10 +101,14 @@
   // ---------- greeting bubble ----------
   let bubble = null, bubbleTimer = 0, greeted = false;
   function hideBubble() { clearTimeout(bubbleTimer); if (bubble) { bubble.remove(); bubble = null; } }
-  function showGreeting() {
+  async function showGreeting() {
     if (greeted || bubble || avatar.classList.contains("has-notice") || !A().greeting || !chat.hidden || !cabinet.hidden) return;
     greeted = true; hideBubble();
-    bubble = Koh.el("div", "av-bubble", Koh.greeting());
+    let text = Koh.greeting();
+    const j = Koh.settings.juunibi;
+    if (j && j.available && j.phrases && Koh.juunibi) { const p = await Koh.juunibi.phrase("auto"); if (p) text = p.text; }
+    if (bubble || !chat.hidden || !cabinet.hidden) return;  // something else took the stage while the phrase was loading
+    bubble = Koh.el("div", "av-bubble", text);
     document.body.append(bubble);
     const s = size(), bw = bubble.offsetWidth, bh = bubble.offsetHeight;
     bubble.style.left = clamp(pos.x + s / 2 - bw / 2, MARGIN, innerWidth - bw - MARGIN) + "px";
@@ -116,16 +120,18 @@
   // ---------- notifications: badge + bubble; the chat shows details and actions ----------
   const badge = document.getElementById("avatar-badge");
   let bubbledId = 0;
-  function showNotice(text) {
+  function showNotice(text, ms = 12000, cls = "notice") {
     if (!chat.hidden || !cabinet.hidden) return;
-    hideBubble(); bubble = Koh.el("div", "av-bubble notice", text);
+    hideBubble(); bubble = Koh.el("div", "av-bubble " + cls, text);
     document.body.append(bubble);
     const s = size(), bw = bubble.offsetWidth, bh = bubble.offsetHeight;
     bubble.style.left = clamp(pos.x + s / 2 - bw / 2, MARGIN, innerWidth - bw - MARGIN) + "px";
     bubble.style.top = (pos.y - bh - 10 >= MARGIN ? pos.y - bh - 10 : pos.y + s + 10) + "px";
     bubble.addEventListener("click", () => { hideBubble(); show(chat, true); });
-    bubbleTimer = setTimeout(hideBubble, 12000);
+    bubbleTimer = setTimeout(hideBubble, ms);
   }
+  // Public: a speech bubble over the avatar (used for phrases from the JUUNIBI library).
+  Koh.say = (text, ms = 9000) => { if (!bubble) showNotice(text, ms, "say"); };
   Koh.statusHooks.push((d) => {
     const n = d.notifications || {unread: 0, latest: null}, on = Koh.settings.app.notifications !== false;
     const count = on ? n.unread : 0;

@@ -4,7 +4,7 @@
   const Koh = window.Koh = {
     settings: {
       avatar: {active_face: "default", crop: "face", shape: "soft", size: 96, opacity: 100, ring: false, ring_color: "#e8be56", glow: true, glow_color: "#e8be56", status_dot: true, animation: "none", snap_edges: false, idle_dim: false, hide_on_open: false, greeting: true, left_action: "chat", right_action: "cabinet", replace_logo: true},
-      faces: [DEFAULT_FACE], ai: {provider: "none"}, app: {}, memory: {enabled: true, learn_chat: true, max_snippets: 6, use_facts: true, auto_facts: true, extract_every: 3, use_summary: true},
+      faces: [DEFAULT_FACE], ai: {provider: "none"}, app: {}, juunibi: {actions: true, phrases: true, ambient: false, generate: true, persona: false, available: false}, memory: {enabled: true, learn_chat: true, max_snippets: 6, use_facts: true, auto_facts: true, extract_every: 3, use_summary: true},
     },
     listeners: [],
     hooks: {},
@@ -36,7 +36,7 @@
     // Accepts the full settings object returned by /api/settings and by endpoints that change it.
     setAll: (d) => {
       if (!d) return;
-      for (const k of ["avatar", "faces", "ai", "app", "memory"]) if (d[k]) Koh.settings[k] = d[k];
+      for (const k of ["avatar", "faces", "ai", "app", "memory", "juunibi"]) if (d[k]) Koh.settings[k] = d[k];
       Koh.loadedOnce = true;
       if (window.KohTheme) window.KohTheme.apply(Koh.settings.app);
       Koh.notify();

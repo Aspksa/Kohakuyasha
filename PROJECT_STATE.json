@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.13.2",
+  "current_version": "0.15.0",
   "status": "brain_v4_ci_pending",
-  "completed_stage": "juunibi_content_v0.13.2",
+  "completed_stage": "juunibi_integration_v0.15.0",
   "current_branch": "feat/brain-v4",
   "last_update": "2026-10-08",
   "canonical_files": [
@@ -22,7 +22,7 @@
   "tests": [
     {
       "name": "pytest",
-      "linux": "119/119 passed",
+      "linux": "142/142 passed",
       "windows": "pending_ci"
     },
     {
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Run on PR for v0.13.2"
+    "note": "Run on PR for v0.15.0"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -51,7 +51,8 @@
     "Retrieval is lexical (FTS5 + crude Russian stemming); semantic embeddings remain future work.",
     "After a rollback the SQLite schema stays at the newer version (older code ignores extra tables).",
     "The Windows relaunch after an update is covered by unit tests and a real two-process lock-race test on Linux; confirm on physical Windows that the app comes back by itself after «Перезапустить сейчас».",
-    "Диск Kohakuyasha: uploads/downloads verified on Linux and in Chromium only; file-name rules for Windows are enforced but not yet exercised on a real Windows drive."
+    "Диск Kohakuyasha: uploads/downloads verified on Linux and in Chromium only; file-name rules for Windows are enforced but not yet exercised on a real Windows drive.",
+    "JUUNIBI action generation is verified with a fake provider only; the quality of real Cloud.ru output (and how often the similarity filter rejects it) is not yet observed."
   ],
   "implemented": [
     "portable_windows_bootstrap",
@@ -149,7 +150,13 @@
     "disk_trash_restore",
     "disk_safe_preview_and_download",
     "disk_design_pass",
-    "juunibi_content_pack_stored"
+    "juunibi_content_pack_stored",
+    "juunibi_actions_no_repeat_sqlite",
+    "juunibi_phrases_shuffle_bag",
+    "juunibi_action_generation_cloudru",
+    "juunibi_avatar_stage_directions",
+    "juunibi_cabinet_tab",
+    "juunibi_optional_persona"
   ],
-  "next_action": "Merge v0.13.1 on user request, then stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments."
+  "next_action": "Merge v0.15.0 on user request, then stage 3: voice/TTS, hotkeys, character profiles, chat attachments (semantic memory is covered by PR #22)."
 }

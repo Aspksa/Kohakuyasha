@@ -167,3 +167,9 @@ Each turn gets a compact working-memory block containing the current user goal a
 
 Deep turns receive a local planning and epistemic-confidence policy inside the prompt, so simple turns stay fast and no extra planning API request is added. Short continuation commands include the latest assistant task state in working memory so multi-turn work resumes instead of restarting. When a new automatically extracted fact contradicts an older unpinned automatic fact with the same semantic core, the newer user information replaces the stale fact; pinned or manual facts are never silently overwritten.
 
+
+## D-026 — JUUNIBI never repeats; failure is visible, not papered over
+**Date:** 2026-10-08
+**Status:** Active
+
+Actions are claimed atomically in SQLite (`juunibi_used`), so restarts, several tabs and cleared browser storage cannot repeat one. Phrases use a shuffle bag per category plus a 60-item recent window. When all actions are used the server asks the provider for one new action (fast model, key never reaches the browser), validates it (length, no name/quotes, trigram similarity ≤ 0.42 against every action) and stores it; after 5 failed attempts or without an AI connection the action is skipped and the reason is shown in the cabinet. The JUUNIBI persona for the assistant is opt-in (off by default) because it changes the tone of every answer.

@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class Database:
@@ -119,6 +119,28 @@ class Database:
                     actions_json TEXT NOT NULL DEFAULT '[]',
                     dedupe_key TEXT UNIQUE,
                     status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'seen', 'done'))
+                );
+                CREATE TABLE IF NOT EXISTS juunibi_used (
+                    kind TEXT NOT NULL CHECK (kind IN ('action', 'phrase')),
+                    item_id TEXT NOT NULL,
+                    category TEXT NOT NULL DEFAULT '',
+                    used_at TEXT NOT NULL,
+                    PRIMARY KEY (kind, item_id)
+                );
+                CREATE TABLE IF NOT EXISTS juunibi_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    kind TEXT NOT NULL,
+                    item_id TEXT NOT NULL,
+                    category TEXT NOT NULL DEFAULT '',
+                    used_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS juunibi_generated (
+                    id TEXT PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    emotion TEXT NOT NULL,
+                    duration REAL NOT NULL,
+                    text TEXT NOT NULL,
+                    created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS dialogs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -493,6 +515,46 @@ class Database:
     def resolve_notifications_by_prefix(self, prefix: str) -> int:
         with self._lock, self.session() as conn:
             return int(conn.execute("UPDATE notifications SET status = 'done' WHERE dedupe_key LIKE ? AND status != 'done'", (prefix + "%",)).rowcount)
+
+    # ---------- JUUNIBI: no-repeat history and generated actions ----------
+    def juunibi_used_ids(self, kind: str) -> set[str]:
+        with self._lock, self.session() as conn:
+            return {r[0] for r in conn.execute("SELECT item_id FROM juunibi_used WHERE kind = ?", (kind,))}
+
+    def juunibi_mark(self, kind: str, item_id: str, category: str = "") -> bool:
+        """Atomically claim an item; False when another caller used it first."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock, self.session() as conn:
+            claimed = conn.execute("INSERT OR IGNORE INTO juunibi_used(kind, item_id, category, used_at) VALUES(?, ?, ?, ?)", (kind, item_id, category, now)).rowcount > 0
+            conn.execute("INSERT INTO juunibi_log(kind, item_id, category, used_at) VALUES(?, ?, ?, ?)", (kind, item_id, category, now))
+            conn.execute("DELETE FROM juunibi_log WHERE id <= (SELECT MAX(id) FROM juunibi_log) - 1000")
+        return claimed
+
+    def juunibi_recent(self, kind: str, limit: int) -> list[str]:
+        with self._lock, self.session() as conn:
+            rows = conn.execute("SELECT item_id FROM juunibi_log WHERE kind = ? ORDER BY id DESC LIMIT ?", (kind, int(limit))).fetchall()
+        return [r[0] for r in rows]
+
+    def juunibi_clear_category(self, kind: str, category: str) -> None:
+        with self._lock, self.session() as conn:
+            conn.execute("DELETE FROM juunibi_used WHERE kind = ? AND category = ?", (kind, category))
+
+    def juunibi_reset(self, kind: str) -> int:
+        with self._lock, self.session() as conn:
+            conn.execute("DELETE FROM juunibi_log WHERE kind = ?", (kind,))
+            return int(conn.execute("DELETE FROM juunibi_used WHERE kind = ?", (kind,)).rowcount)
+
+    def juunibi_add_generated(self, item: dict[str, Any]) -> None:
+        with self._lock, self.session() as conn:
+            conn.execute(
+                "INSERT INTO juunibi_generated(id, category, emotion, duration, text, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+                (item["id"], item["category"], item["emotion"], float(item["duration_seconds"]), item["text"], datetime.now(timezone.utc).isoformat()),
+            )
+
+    def juunibi_generated(self) -> list[dict[str, Any]]:
+        with self._lock, self.session() as conn:
+            rows = conn.execute("SELECT id, category, emotion, duration, text FROM juunibi_generated ORDER BY created_at").fetchall()
+        return [{"id": r[0], "category": r[1], "emotion": r[2], "duration_seconds": r[3], "text": r[4], "tags": ["generated"]} for r in rows]
 
     def chat_after(self, after_id: int, limit: int = 200) -> list[dict[str, Any]]:
         with self._lock, self.session() as conn:

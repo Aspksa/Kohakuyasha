@@ -121,6 +121,14 @@
       typingRow.append(ava, body); log.append(typingRow); toBottom(true);
     } else if (!on && typingRow) { typingRow.remove(); typingRow = null; }
   }
+  // Stage direction shown by the avatar before the answer ("she smiles, tails fan out…").
+  function stageLine(action) { return el("div", "stage-line", Koh.juunibi.plain(action.text)); }
+  function showStage(action) {
+    if (!typingRow || !action) return;
+    const body = typingRow.querySelector(".body");
+    if (body && !body.querySelector(".stage-line")) { body.insertBefore(stageLine(action), body.querySelector(".typing")); toBottom(true); }
+    Koh.juunibi.perform(action);
+  }
   function renderEmpty() {
     const box = el("div", "chat-empty"), im = Koh.faceImg("", "big");
     const grid = el("div", "suggest");
@@ -149,13 +157,18 @@
     sending = true; abortCtl = new AbortController(); requestId = Math.random().toString(36).slice(2) + Date.now().toString(36); input.value = ""; autosize(); updateSend();
     addMessage({role: "user", content: text, created_at: new Date().toISOString()}, true);
     setTyping(true);
+    let stage = null, answered = false;
+    if (Koh.juunibi) Koh.juunibi.action(null, text.slice(0, 120)).then(a => { if (a && !answered) { stage = a; showStage(a); } });
     try {
       const d = await api("/api/chat", {method: "POST", body: JSON.stringify({text, request_id: requestId}), signal: abortCtl.signal});
+      answered = true;
       setTyping(false);
+      if (stage && d.messages.some(m => m.role === "assistant")) { const row = el("div", "row stage"); row.append(stageLine(stage)); log.append(row); }
       d.messages.filter(m => m.role === "assistant").forEach(m => addMessage(m, true));
       if (d.remembered && d.remembered.length) { log.append(el("div", "remember-note", "✦ Запомнила: " + d.remembered.join("; "))); toBottom(true); }
       if (d.error) addError(d.error);
     } catch (e) {
+      answered = true;
       setTyping(false);
       if (e && e.name === "AbortError") { log.append(el("div", "daysep", "Ответ остановлен")); toBottom(true); }
       else addError("Не удалось отправить сообщение. Проверьте, что Kohakuyasha запущена.");
