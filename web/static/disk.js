@@ -204,4 +204,6 @@
   });
   search.addEventListener("input", Koh.debounce(() => { query = search.value.trim(); mode = "files"; refresh(); }, 300));
   Koh.refreshDisk = refresh;
+  // The page can already be active when this script loads (reload on #disk): app.js ran before Koh.refreshDisk existed.
+  if (active()) refresh();
 })();

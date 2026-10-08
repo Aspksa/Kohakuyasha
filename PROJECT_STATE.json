@@ -3,9 +3,9 @@
   "project": "Kohakuyasha",
   "repository": "Aspksa/Kohakuyasha",
   "source_of_truth": "repository",
-  "current_version": "0.13.0",
+  "current_version": "0.13.1",
   "status": "brain_v4_ci_pending",
-  "completed_stage": "brain_v4_implementation",
+  "completed_stage": "disk_fixes_v0.13.1",
   "current_branch": "feat/brain-v4",
   "last_update": "2026-10-07",
   "canonical_files": [
@@ -36,7 +36,7 @@
   ],
   "ci": {
     "status": "pending",
-    "note": "Validate Brain v4 on Linux and Windows"
+    "note": "Run on PR for v0.13.1"
   },
   "known_issues": [
     "Physical Windows tray/bootstrap/autostart/removable-drive integration is not yet validated on a real user machine.",
@@ -150,5 +150,5 @@
     "disk_safe_preview_and_download",
     "disk_design_pass"
   ],
-  "next_action": "Merge Brain v4 after green CI, then continue with semantic memory groundwork."
+  "next_action": "Merge v0.13.1 on user request, then stage 3: voice/TTS, hotkeys, character profiles, semantic search, chat attachments."
 }
